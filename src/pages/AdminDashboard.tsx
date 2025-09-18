@@ -24,7 +24,7 @@ import { Button } from "../components/ui/button";
 export const AdminDashboard: React.FC = () => {
   // Mock data - in real app, this would come from API
   const stats = {
-    totalClients: 24,
+    totalProjects: 24,
     activeBatches: 12,
     pendingOrders: 156,
     completedOrders: 2389,
@@ -38,9 +38,9 @@ export const AdminDashboard: React.FC = () => {
   const recentActivity = [
     {
       id: 1,
-      action: 'New client "ABC Corp" created',
+      action: 'New project "ABC Corp" created',
       time: "2 minutes ago",
-      type: "client",
+      type: "project",
     },
     {
       id: 2,
@@ -67,16 +67,16 @@ export const AdminDashboard: React.FC = () => {
       {/* Header Section */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-2">
             Overview of system performance and quick actions
           </p>
         </div>
         <div className="flex space-x-3">
-          <Link to="/clients">
+          <Link to="/projects">
             <Button variant="outline">
               <Plus className="w-4 h-4 mr-2" />
-              Create Client
+              Create Project
             </Button>
           </Link>
           <Link to="/schemas">
@@ -92,11 +92,13 @@ export const AdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Projects
+            </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalClients}</div>
+            <div className="text-2xl font-bold">{stats.totalProjects}</div>
             <p className="text-xs text-muted-foreground">+2 from last month</p>
           </CardContent>
         </Card>
@@ -149,14 +151,14 @@ export const AdminDashboard: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common administrative tasks</CardDescription>
+            <CardDescription>Common management tasks</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <Link to="/clients">
+              <Link to="/projects">
                 <Button variant="outline" className="h-20 flex-col w-full">
                   <Users className="h-6 w-6 mb-2" />
-                  <span>Manage Clients</span>
+                  <span>Manage Projects</span>
                 </Button>
               </Link>
               <Link to="/schemas">
@@ -192,7 +194,7 @@ export const AdminDashboard: React.FC = () => {
               {recentActivity.map((activity) => (
                 <div key={activity.id} className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
-                    {activity.type === "client" && (
+                    {activity.type === "project" && (
                       <Users className="h-4 w-4 text-blue-500" />
                     )}
                     {activity.type === "batch" && (

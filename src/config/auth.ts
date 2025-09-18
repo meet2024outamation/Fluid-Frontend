@@ -15,24 +15,27 @@ export const msalConfig: Configuration = {
   },
 };
 
-// Login request configuration
+// Login request configuration with backend API scope
 export const loginRequest: PopupRequest = {
-  scopes: ["User.Read", "openid", "profile"],
+  scopes: ["User.Read", "openid", "profile", "email"],
   prompt: "select_account",
 };
 
-// Graph API scopes
+// API token request configuration
+export const apiTokenRequest = {
+  scopes: ["User.Read"], // Add your backend API scope here if needed
+};
+
+// Graph API configuration
 export const graphConfig = {
   graphMeEndpoint: "https://graph.microsoft.com/v1.0/me",
   graphUsersEndpoint: "https://graph.microsoft.com/v1.0/users",
 };
 
-// Role mapping configuration
-export const roleMapping = {
-  admin: ["Admin", "Global Administrator", "Application Administrator"],
-  manager: ["Manager", "Team Lead", "Supervisor"],
-  operator: ["Operator", "Data Entry", "User"],
+// Backend API endpoints for user management
+export const userApiEndpoints = {
+  getUserByEmail: "/api/users/email", // New endpoint to get user by email
+  getUserById: (id: number) => `/api/users/${id}`, // Get user by ID
+  createUser: "/api/users", // Create new user
+  refreshToken: "/api/auth/refresh",
 };
-
-// Default role for new users
-export const defaultRole = "Operator";

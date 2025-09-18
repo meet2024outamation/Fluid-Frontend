@@ -1,5 +1,4 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://localhost:7253";
+import { API_CONFIG, apiRequest } from "../config/api";
 
 export interface FieldMappingItem {
   schemaFieldId: number;
@@ -8,18 +7,29 @@ export interface FieldMappingItem {
 }
 
 export interface CreateBulkFieldMappingRequest {
-  clientId: number;
+  projectId: number;
   schemaId: number;
   fieldMappings: FieldMappingItem[];
 }
 
 export interface CreateBulkFieldMappingResponse {
   id: number;
-  clientId: number;
+  projectId: number;
   schemaId: number;
   fieldMappings: FieldMappingItem[];
   createdAt: string;
   createdBy: string;
+}
+
+// Interface for the actual API response from GET /field-mappings
+export interface FieldMappingResponse {
+  id: number;
+  projectId: number;
+  schemaId: number;
+  schemaFieldId: number;
+  inputField: string;
+  transformation: string | null;
+  createdAt: string;
 }
 
 export interface SchemaField {
@@ -44,12 +54,22 @@ export interface Schema {
 class FieldMappingService {
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ message: "Unknown error occurred" }));
-      throw new Error(
-        errorData.message || `HTTP ${response.status}: ${response.statusText}`
-      );
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorData = await response.json();
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.title) {
+          errorMessage = errorData.title;
+        } else if (typeof errorData === "string") {
+          errorMessage = errorData;
+        }
+      } catch (jsonError) {
+        console.warn("Could not parse error response as JSON:", jsonError);
+      }
+
+      throw new Error(errorMessage);
     }
     return response.json();
   }
@@ -57,63 +77,66 @@ class FieldMappingService {
   async createBulkFieldMapping(
     request: CreateBulkFieldMappingRequest
   ): Promise<CreateBulkFieldMappingResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/field-mappings`, {
+    const payload = {
+      ProjectId: request.projectId,
+      SchemaId: request.schemaId,
+      FieldMappings: request.fieldMappings.map((fm) => ({
+        SchemaFieldId: fm.schemaFieldId,
+        InputField: fm.inputField,
+        Transformation: fm.transformation || null,
+      })),
+    };
+
+    console.log("Creating bulk field mapping with payload:", payload);
+
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.FIELD_MAPPINGS, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ClientId: request.clientId,
-        SchemaId: request.schemaId,
-        FieldMappings: request.fieldMappings.map((fm) => ({
-          SchemaFieldId: fm.schemaFieldId,
-          InputField: fm.inputField,
-          Transformation: fm.transformation || null,
-        })),
-      }),
+      body: JSON.stringify(payload),
     });
 
+    console.log("Response status:", response.status, response.statusText);
     return this.handleResponse<CreateBulkFieldMappingResponse>(response);
   }
 
   async getFieldMappings(
-    clientId?: number,
+    projectId?: number,
     schemaId?: number
-  ): Promise<CreateBulkFieldMappingResponse[]> {
+  ): Promise<FieldMappingResponse[]> {
     const params = new URLSearchParams();
-    if (clientId) params.append("clientId", clientId.toString());
+    if (projectId) params.append("projectId", projectId.toString());
     if (schemaId) params.append("schemaId", schemaId.toString());
 
-    const url = `${API_BASE_URL}/api/field-mappings${params.toString() ? "?" + params.toString() : ""}`;
+    const endpoint = `${API_CONFIG.ENDPOINTS.FIELD_MAPPINGS}${params.toString() ? "?" + params.toString() : ""}`;
 
-    const response = await fetch(url, {
+    console.log("Fetching field mappings from:", endpoint);
+
+    const response = await apiRequest(endpoint, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
     });
 
-    return this.handleResponse<CreateBulkFieldMappingResponse[]>(response);
+    console.log(
+      "Field mappings response status:",
+      response.status,
+      response.statusText
+    );
+    return this.handleResponse<FieldMappingResponse[]>(response);
   }
 
   async getSchemas(): Promise<Schema[]> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas`, {
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
     });
 
     return this.handleResponse<Schema[]>(response);
   }
 
   async getSchemaById(schemaId: number): Promise<Schema> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas/${schemaId}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
+      {
+        method: "GET",
+      }
+    );
 
     return this.handleResponse<Schema>(response);
   }

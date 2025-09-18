@@ -1,9 +1,11 @@
+import { API_CONFIG, apiRequest } from "../config/api";
+
 export interface OrderListResponse {
   id: number;
   batchId: number;
   batchFileName: string;
-  clientId: number;
-  clientName: string;
+  projectId: number;
+  projectName: string;
   status: string;
   priority: number;
   assignedTo?: number;
@@ -40,8 +42,17 @@ export interface OrderFilters {
 }
 
 class OrderService {
-  private baseUrl =
-    import.meta.env.VITE_API_BASE_URL || "https://localhost:7253";
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: "Unknown error occurred" }));
+      throw new Error(
+        errorData.message || `HTTP ${response.status}: ${response.statusText}`
+      );
+    }
+    return response.json();
+  }
 
   async getOrders(filters: OrderFilters = {}): Promise<OrderListPagedResponse> {
     const params = new URLSearchParams();
@@ -57,45 +68,48 @@ class OrderService {
     if (filters.pageSize)
       params.append("pageSize", filters.pageSize.toString());
 
-    const response = await fetch(`${this.baseUrl}/api/orders?${params}`);
+    const endpoint = `${API_CONFIG.ENDPOINTS.ORDERS}?${params}`;
+    const response = await apiRequest(endpoint, {
+      method: "GET",
+    });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch orders: ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse<OrderListPagedResponse>(response);
   }
 
   async assignOrderToMe(orderId: number, userId: number): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/api/orders/${orderId}/assign`,
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.ORDERS}/${orderId}/assign`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ assignedTo: userId }),
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to assign order: ${response.statusText}`);
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: "Unknown error occurred" }));
+      throw new Error(
+        errorData.message || `HTTP ${response.status}: ${response.statusText}`
+      );
     }
   }
 
   async startProcessing(orderId: number): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/api/orders/${orderId}/start`,
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.ORDERS}/${orderId}/start`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to start processing: ${response.statusText}`);
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: "Unknown error occurred" }));
+      throw new Error(
+        errorData.message || `HTTP ${response.status}: ${response.statusText}`
+      );
     }
   }
 }

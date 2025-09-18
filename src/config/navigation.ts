@@ -1,4 +1,44 @@
-import type { NavigationItem } from "../types";
+import type { NavigationItem, User, ProjectRole } from "../types";
+
+// Helper function to determine primary user role for navigation
+export const getUserPrimaryRole = (user: User): string => {
+  if (!user.roles || user.roles.length === 0) {
+    // Default fallback - you might want to determine this differently
+    return "Operator";
+  }
+
+  // Get the first role from the user's roles array
+  const firstRole = user.roles[0];
+
+  // If it's a ProjectRole object, check if it has roleName first, then map roleId
+  if (typeof firstRole === "object" && "roleId" in firstRole) {
+    const projectRole = firstRole as ProjectRole;
+    
+    // Use roleName from backend if available
+    if (projectRole.roleName) {
+      return projectRole.roleName;
+    }
+    
+    // Fallback to roleId mapping if roleName is not available
+    switch (projectRole.roleId) {
+      case 1:
+        return "Product Owner";
+      case 2:
+        return "Tenant Owner";
+      case 3:
+        return "Operator";
+      default:
+        return "Operator";
+    }
+  }
+
+  // If it's already a string role, use it directly (legacy support)
+  if (typeof firstRole === "string") {
+    return firstRole;
+  }
+
+  return "Operator"; // Default fallback
+};
 
 export const navigationItems: NavigationItem[] = [
   {
@@ -6,7 +46,7 @@ export const navigationItems: NavigationItem[] = [
     label: "Dashboard",
     icon: "LayoutDashboard",
     path: "/dashboard",
-    roles: ["Admin", "Manager"],
+    roles: ["Tenant Owner"],
   },
   {
     id: "operator-dashboard",
@@ -16,32 +56,32 @@ export const navigationItems: NavigationItem[] = [
     roles: ["Operator"],
   },
   {
-    id: "clients",
-    label: "Client Management",
+    id: "projects",
+    label: "Project Management",
     icon: "Users",
-    path: "/clients",
-    roles: ["Admin", "Manager"],
+    path: "/projects",
+    roles: ["Tenant Owner"],
   },
   {
     id: "schemas",
     label: "Schema Management",
     icon: "Database",
     path: "/schemas",
-    roles: ["Admin"],
+    roles: ["Tenant Owner"],
   },
   {
     id: "field-mapping",
     label: "Field Mapping",
     icon: "ArrowRightLeft",
     path: "/field-mapping",
-    roles: ["Admin", "Manager"],
+    roles: ["Tenant Owner"],
   },
   {
     id: "batches",
     label: "Batch Management",
     icon: "Package",
     path: "/batches",
-    roles: ["Admin", "Manager"],
+    roles: ["Tenant Owner"],
   },
   {
     id: "orders",
@@ -51,14 +91,31 @@ export const navigationItems: NavigationItem[] = [
     roles: ["Operator"],
   },
   {
-    id: "settings",
-    label: "Settings",
-    icon: "Settings",
-    path: "/settings",
-    roles: ["Admin"],
+    id: "user-management",
+    label: "User Management",
+    icon: "UserCog",
+    path: "/users",
+    roles: ["Product Owner"],
+  },
+  {
+    id: "tenant-management",
+    label: "Tenant Management",
+    icon: "Building",
+    path: "/tenants",
+    roles: ["Product Owner"],
   },
 ];
 
 export const getNavigationForRole = (role: string): NavigationItem[] => {
-  return navigationItems.filter((item) => item.roles.includes(role as any));
+  // Map legacy "Admin" role to "Product Owner" for backward compatibility
+  const normalizedRole = role === "Admin" ? "Product Owner" : role;
+
+  return navigationItems.filter((item) =>
+    item.roles.includes(normalizedRole as any)
+  );
+};
+
+export const getNavigationForUser = (user: User): NavigationItem[] => {
+  const primaryRole = getUserPrimaryRole(user);
+  return getNavigationForRole(primaryRole);
 };

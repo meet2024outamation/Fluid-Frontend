@@ -1,5 +1,4 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://localhost:7253";
+import { API_CONFIG, apiRequest } from "../config/api";
 
 export interface SchemaField {
   id: number;
@@ -98,47 +97,35 @@ class SchemaService {
   }
 
   async getAllSchemas(): Promise<SchemaListResponse[]> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas`, {
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
     });
-
     return this.handleResponse<SchemaListResponse[]>(response);
   }
 
   async getSchemasByClientId(clientId: number): Promise<SchemaListResponse[]> {
-    const response = await fetch(
-      `${API_BASE_URL}/api/schemas?clientId=${clientId}`,
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.SCHEMAS}?projectId=${clientId}`,
       {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
       }
     );
-
     return this.handleResponse<SchemaListResponse[]>(response);
   }
 
   async getSchemaById(schemaId: number): Promise<Schema> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas/${schemaId}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
+      {
+        method: "GET",
+      }
+    );
     return this.handleResponse<Schema>(response);
   }
 
   async createSchema(request: CreateSchemaRequest): Promise<Schema> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas`, {
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({
         Name: request.name,
         Description: request.description || null,
@@ -157,38 +144,38 @@ class SchemaService {
   }
 
   async updateSchema(request: UpdateSchemaRequest): Promise<Schema> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas/${request.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        Name: request.name,
-        Description: request.description || null,
-        IsActive: request.isActive,
-        SchemaFields: request.schemaFields
-          .filter((field) => !field.isDeleted) // Only include non-deleted fields
-          .map((field) => ({
-            FieldName: field.fieldName,
-            FieldLabel: field.fieldLabel,
-            DataType: field.dataType,
-            Format: field.format || null,
-            IsRequired: field.isRequired,
-            DisplayOrder: field.displayOrder,
-          })),
-      }),
-    });
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${request.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          Name: request.name,
+          Description: request.description || null,
+          IsActive: request.isActive,
+          SchemaFields: request.schemaFields
+            .filter((field) => !field.isDeleted) // Only include non-deleted fields
+            .map((field) => ({
+              FieldName: field.fieldName,
+              FieldLabel: field.fieldLabel,
+              DataType: field.dataType,
+              Format: field.format || null,
+              IsRequired: field.isRequired,
+              DisplayOrder: field.displayOrder,
+            })),
+        }),
+      }
+    );
 
     return this.handleResponse<Schema>(response);
   }
 
   async deleteSchema(schemaId: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas/${schemaId}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
+      {
+        method: "DELETE",
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response
@@ -204,15 +191,15 @@ class SchemaService {
     schemaId: number,
     isActive: boolean
   ): Promise<Schema> {
-    const response = await fetch(`${API_BASE_URL}/api/schemas/${schemaId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        IsActive: isActive,
-      }),
-    });
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          IsActive: isActive,
+        }),
+      }
+    );
 
     return this.handleResponse<Schema>(response);
   }

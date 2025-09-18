@@ -1,26 +1,102 @@
 // User and Authentication Types
 export interface User {
-  id: string;
-  name: string;
+  id: number; // Changed from string to number to match C# int Id
   email: string;
-  role: UserRole;
-  department?: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  isActive: boolean;
+  roles: ProjectRole[];
+  createdAt: Date;
+  updatedAt?: Date; // Made optional to match C# DateTime?
 }
 
-export type UserRole = "Admin" | "Manager" | "Operator";
+export interface UserRequest {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  isActive: boolean;
+  roles: ProjectRole[];
+}
 
-// Client Management Types
-export interface Client {
+export interface CreateUserRequest extends UserRequest {}
+
+export interface UpdateUserRequest extends UserRequest {
+  id: number;
+}
+
+export interface ProjectRole {
+  tenantId: string;
+  projectId: number;
+  roleId: number;
+  tenantName?: string;
+  projectName?: string;
+  roleName?: string;
+}
+
+// Types for dropdown data in forms
+export interface TenantOption {
+  id: string;
+  name: string;
+}
+
+export interface ProjectOption {
+  id: number;
+  name: string;
+  tenantId: string;
+}
+
+export interface RoleOption {
+  id: number;
+  name: string;
+}
+
+export type UserRole = "Product Owner" | "Tenant Owner" | "Operator";
+
+// Tenant Management Types
+export interface Tenant {
+  id: string;
+  identifier: string;
+  name: string;
+  description?: string;
+  databaseName?: string;
+  properties?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  userCount: number;
+  projectCount: number;
+}
+
+export interface CreateTenantRequest {
+  identifier: string;
+  name: string;
+  description?: string;
+  databaseName?: string;
+  properties?: string;
+}
+
+export interface UpdateTenantRequest {
+  identifier: string;
+  name: string;
+  description?: string;
+  databaseName?: string;
+  properties?: string;
+}
+
+// Project Management Types
+export interface Project {
   id: string;
   name: string;
   code: string;
-  status: ClientStatus;
+  status: ProjectStatus;
   schemas: Schema[];
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type ClientStatus = "Draft" | "Ready" | "Active";
+export type ProjectStatus = "Draft" | "Ready" | "Active";
 
 // Schema Types
 export interface Schema {
@@ -62,7 +138,7 @@ export type FieldDataType =
 // Field Mapping Types
 export interface FieldMapping {
   id: string;
-  clientId: string;
+  projectId: string;
   inputField: string;
   schemaField: SchemaField;
   confidence: number;
@@ -78,8 +154,8 @@ export interface CSVColumn {
 // Batch Management Types
 export interface Batch {
   id: string;
-  clientId: string;
-  client: Client;
+  projectId: string;
+  project: Project;
   receivedDate: Date;
   status: BatchStatus;
   totalOrders: number;
@@ -105,7 +181,7 @@ export interface ValidationError {
 // Batch Creation Types
 export interface CreateBatchFormData {
   fileName: string;
-  clientId: number;
+  projectId: number;
   name: string;
   description: string;
   metadataFile: File | null;
@@ -124,7 +200,7 @@ export interface BatchCreationStep {
 export interface Order {
   id: string;
   batchId: string;
-  assignedTo?: string;
+  assignedTo?: number;
   status: OrderStatus;
   priority: OrderPriority;
   documents: Document[];
@@ -138,8 +214,8 @@ export interface Order {
   assignedUserName?: string;
   startedAt?: Date;
   updatedAt?: Date;
-  clientId?: number;
-  clientName?: string;
+  projectId?: number;
+  projectName?: string;
   hasValidationErrors?: boolean;
   documentCount?: number;
   fieldCount?: number;
@@ -178,7 +254,7 @@ export interface KeyingFieldValue {
 
 // Dashboard Types
 export interface DashboardStats {
-  totalClients: number;
+  totalProjects: number;
   activeBatches: number;
   pendingOrders: number;
   completedOrders: number;

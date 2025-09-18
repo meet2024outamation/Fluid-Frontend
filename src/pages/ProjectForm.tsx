@@ -17,20 +17,22 @@ import {
 } from "../components/ui/card";
 import { Modal } from "../components/ui/modal";
 import {
-  clientService,
-  type ApiClient,
-  type CreateClientRequest,
-  type UpdateClientRequest,
-} from "../services/clientService";
+  projectService,
+  type ApiProject,
+  type CreateProjectRequest,
+  type UpdateProjectRequest,
+} from "../services/projectService";
 
-const ClientForm: React.FC = () => {
+const ProjectForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const clientId = id ? parseInt(id) : null;
-  const isEditMode = clientId !== null;
+  const projectId = id ? parseInt(id) : null;
+  const isEditMode = projectId !== null;
   const isCreateMode = !isEditMode;
 
-  const [originalClient, setOriginalClient] = useState<ApiClient | null>(null);
+  const [originalProject, setOriginalProject] = useState<ApiProject | null>(
+    null
+  );
   const [formData, setFormData] = useState({
     name: "",
     code: "",
@@ -44,28 +46,28 @@ const ClientForm: React.FC = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    if (isEditMode && clientId && clientId > 0) {
-      loadClient();
+    if (isEditMode && projectId && projectId > 0) {
+      loadProject();
     }
-  }, [clientId, isEditMode]);
+  }, [projectId, isEditMode]);
 
-  const loadClient = async () => {
-    if (!clientId) return;
+  const loadProject = async () => {
+    if (!projectId) return;
 
     try {
       setIsLoading(true);
-      const client = await clientService.getClientById(clientId);
-      setOriginalClient(client);
+      const project = await projectService.getProjectById(projectId);
+      setOriginalProject(project);
 
       setFormData({
-        name: client.name,
-        code: client.code,
-        isActive: client.isActive,
+        name: project.name,
+        code: project.code,
+        isActive: project.isActive,
       });
     } catch (error) {
-      console.error("Failed to load client:", error);
+      console.error("Failed to load project:", error);
       setSubmitError(
-        error instanceof Error ? error.message : "Failed to load client"
+        error instanceof Error ? error.message : "Failed to load project"
       );
     } finally {
       setIsLoading(false);
@@ -80,24 +82,24 @@ const ClientForm: React.FC = () => {
 
   const validateForm = (): boolean => {
     if (isCreateMode) {
-      const createRequest: CreateClientRequest = {
+      const createRequest: CreateProjectRequest = {
         name: formData.name.trim(),
         code: formData.code.trim(),
         isActive: formData.isActive,
       };
 
-      const validation = clientService.validateClient(createRequest);
+      const validation = projectService.validateProject(createRequest);
       setValidationErrors(validation.errors);
       return validation.isValid;
     } else {
-      const updateRequest: UpdateClientRequest = {
-        id: clientId!,
+      const updateRequest: UpdateProjectRequest = {
+        id: projectId!,
         name: formData.name.trim(),
         code: formData.code.trim(),
         isActive: formData.isActive,
       };
 
-      const validation = clientService.validateClient(updateRequest);
+      const validation = projectService.validateProject(updateRequest);
       setValidationErrors(validation.errors);
       return validation.isValid;
     }
@@ -113,39 +115,39 @@ const ClientForm: React.FC = () => {
 
     try {
       if (isCreateMode) {
-        const request: CreateClientRequest = {
+        const request: CreateProjectRequest = {
           name: formData.name.trim(),
           code: formData.code.trim(),
           isActive: formData.isActive,
         };
 
-        await clientService.createClient(request);
+        await projectService.createProject(request);
       } else {
-        const request: UpdateClientRequest = {
-          id: clientId!,
+        const request: UpdateProjectRequest = {
+          id: projectId!,
           name: formData.name.trim(),
           code: formData.code.trim(),
           isActive: formData.isActive,
         };
 
-        await clientService.updateClient(request);
+        await projectService.updateProject(request);
       }
 
       setShowSuccessModal(true);
 
       // Redirect after a brief delay
       setTimeout(() => {
-        navigate("/clients");
+        navigate("/projects");
       }, 2000);
     } catch (error) {
       console.error(
-        `Failed to ${isCreateMode ? "create" : "update"} client:`,
+        `Failed to ${isCreateMode ? "create" : "update"} project:`,
         error
       );
       setSubmitError(
         error instanceof Error
           ? error.message
-          : `Failed to ${isCreateMode ? "create" : "update"} client`
+          : `Failed to ${isCreateMode ? "create" : "update"} project`
       );
     } finally {
       setIsSubmitting(false);
@@ -158,27 +160,27 @@ const ClientForm: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center justify-center p-8">
             <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-            Loading client...
+            Loading project...
           </div>
         </div>
       </div>
     );
   }
 
-  if (isEditMode && !originalClient) {
+  if (isEditMode && !originalProject) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center p-8">
             <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Client not found
+              Project not found
             </h3>
             <p className="text-gray-600 mb-4">
-              The client you're looking for doesn't exist.
+              The project you're looking for doesn't exist.
             </p>
-            <Link to="/clients">
-              <Button>Back to Client Management</Button>
+            <Link to="/projects">
+              <Button>Back to Project Management</Button>
             </Link>
           </div>
         </div>
@@ -192,56 +194,54 @@ const ClientForm: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-center gap-4">
             <Link
-              to="/clients"
+              to="/projects"
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Client Management
+              Back to Project Management
             </Link>
           </div>
           <h1 className="text-3xl font-bold tracking-tight mt-4">
             {isCreateMode
-              ? "Create New Client"
-              : `Edit Client: ${originalClient?.name}`}
+              ? "Create New Project"
+              : `Edit Project: ${originalProject?.name}`}
           </h1>
           <p className="text-muted-foreground mt-2">
             {isCreateMode
-              ? "Add a new client organization to the system"
-              : "Modify client details and configuration"}
+              ? "Add a new project to the system"
+              : "Modify project details and configuration"}
           </p>
         </div>
 
         <div className="space-y-6">
-          {/* Client Basic Information */}
+          {/* Project Basic Information */}
           <Card>
             <CardHeader>
-              <CardTitle>Client Information</CardTitle>
-              <CardDescription>
-                Basic details about the client organization
-              </CardDescription>
+              <CardTitle>Project Information</CardTitle>
+              <CardDescription>Basic details about the project</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Client Name <span className="text-red-500">*</span>
+                    Project Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => handleInputChange("name", e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., Acme Corporation"
+                    placeholder="e.g., Data Migration Project"
                     maxLength={255}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    The full legal name of the client organization
+                    The full name of the project
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Client Code <span className="text-red-500">*</span>
+                    Project Code <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -250,11 +250,11 @@ const ClientForm: React.FC = () => {
                       handleInputChange("code", e.target.value.toUpperCase())
                     }
                     className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                    placeholder="e.g., ACME001"
+                    placeholder="e.g., PROJ001"
                     maxLength={50}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Unique identifier for the client (letters, numbers,
+                    Unique identifier for the project (letters, numbers,
                     underscores, hyphens only)
                   </p>
                 </div>
@@ -270,10 +270,10 @@ const ClientForm: React.FC = () => {
                     }
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <span className="text-sm font-medium">Client is active</span>
+                  <span className="text-sm font-medium">Project is active</span>
                 </label>
                 <p className="text-xs text-gray-500 mt-1 ml-6">
-                  Inactive clients cannot be used for new batches or processing
+                  Inactive projects cannot be used for new batches or processing
                 </p>
               </div>
             </CardContent>
@@ -317,17 +317,17 @@ const ClientForm: React.FC = () => {
               {isSubmitting ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  {isCreateMode ? "Creating Client..." : "Updating Client..."}
+                  {isCreateMode ? "Creating Project..." : "Updating Project..."}
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  {isCreateMode ? "Create Client" : "Update Client"}
+                  {isCreateMode ? "Create Project" : "Update Project"}
                 </>
               )}
             </Button>
 
-            <Link to="/clients">
+            <Link to="/projects">
               <Button variant="outline" size="lg" disabled={isSubmitting}>
                 Cancel
               </Button>
@@ -339,7 +339,7 @@ const ClientForm: React.FC = () => {
         <Modal
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
-          title={`Client ${isCreateMode ? "Created" : "Updated"} Successfully`}
+          title={`Project ${isCreateMode ? "Created" : "Updated"} Successfully`}
         >
           <div className="text-center p-6">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
@@ -347,11 +347,11 @@ const ClientForm: React.FC = () => {
               Success!
             </h3>
             <p className="text-gray-600 mb-4">
-              The client "{formData.name}" has been{" "}
+              The project "{formData.name}" has been{" "}
               {isCreateMode ? "created" : "updated"} successfully.
             </p>
             <p className="text-sm text-gray-500">
-              Redirecting to client management...
+              Redirecting to project management...
             </p>
           </div>
         </Modal>
@@ -360,4 +360,4 @@ const ClientForm: React.FC = () => {
   );
 };
 
-export default ClientForm;
+export default ProjectForm;

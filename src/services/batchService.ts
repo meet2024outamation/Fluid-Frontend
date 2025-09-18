@@ -1,9 +1,13 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://localhost:7253";
+import {
+  API_CONFIG,
+  buildApiUrl,
+  getAuthHeaders,
+  apiRequest,
+} from "../config/api";
 
 export interface CreateBatchRequest {
   fileName: string;
-  clientId: number;
+  projectId: number;
   name: string;
   description?: string;
   metadataFile: File;
@@ -14,11 +18,25 @@ export interface CreateBatchResponse {
   id: string;
   name: string;
   fileName: string;
-  clientId: number;
+  projectId: number;
   description?: string;
   status: string;
   createdAt: string;
   documentCount: number;
+}
+
+export interface BatchListResponse {
+  id: number;
+  name: string;
+  fileName: string;
+  projectName: string;
+  status: string;
+  totalOrders: number;
+  processedOrders: number;
+  validOrders: number;
+  invalidOrders: number;
+  createdAt: string;
+  createdByName: string;
 }
 
 export interface BatchValidationError {
@@ -49,7 +67,7 @@ class BatchService {
 
     // Add required fields
     formData.append("FileName", request.fileName);
-    formData.append("ClientId", request.clientId.toString());
+    formData.append("ProjectId", request.projectId.toString());
     formData.append("Name", request.name);
     formData.append("MetadataFile", request.metadataFile);
 
@@ -68,19 +86,47 @@ class BatchService {
       });
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/batches`, {
+    const url = buildApiUrl(API_CONFIG.ENDPOINTS.BATCHES);
+    const authHeaders = getAuthHeaders();
+
+    // Create headers without Content-Type for multipart/form-data
+    const headers: Record<string, string> = {};
+    if (authHeaders["Authorization"]) {
+      headers["Authorization"] = authHeaders["Authorization"] as string;
+    }
+
+    const response = await fetch(url, {
       method: "POST",
       body: formData,
-      // Don't set Content-Type header - let the browser set it with boundary for multipart/form-data
+      headers,
     });
 
     return this.handleResponse<CreateBatchResponse>(response);
   }
 
+  async getAllBatches(): Promise<BatchListResponse[]> {
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.BATCHES, {
+      method: "GET",
+    });
+
+    return this.handleResponse<BatchListResponse[]>(response);
+  }
+
+  async getBatchById(batchId: number): Promise<BatchListResponse> {
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.BATCHES}/${batchId}`,
+      {
+        method: "GET",
+      }
+    );
+
+    return this.handleResponse<BatchListResponse>(response);
+  }
+
   async validateMetadataFile(
     file: File
   ): Promise<{ isValid: boolean; errors?: string[] }> {
-    // Client-side validation for CSV/Excel file
+    // Project-side validation for CSV/Excel file
     const errors: string[] = [];
 
     if (!file) {

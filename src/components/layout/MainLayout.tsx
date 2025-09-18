@@ -12,9 +12,14 @@ import {
   X,
   LogOut,
   User,
+  UserCog,
+  Building,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { getNavigationForRole } from "../../config/navigation";
+import {
+  getNavigationForUser,
+  getUserPrimaryRole,
+} from "../../config/navigation";
 import { Button } from "../ui/button";
 
 const iconMap = {
@@ -25,6 +30,8 @@ const iconMap = {
   Package,
   FileText,
   Settings,
+  UserCog,
+  Building,
 };
 
 export const MainLayout: React.FC = () => {
@@ -37,7 +44,7 @@ export const MainLayout: React.FC = () => {
     return null;
   }
 
-  const navigationItems = getNavigationForRole(user.role);
+  const navigationItems = getNavigationForUser(user);
 
   const handleLogout = async () => {
     try {
@@ -81,7 +88,11 @@ export const MainLayout: React.FC = () => {
                   }`}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <Icon size={20} className="mr-3" />
+                  {Icon ? (
+                    <Icon size={20} className="mr-3" />
+                  ) : (
+                    <div className="w-5 h-5 mr-3" />
+                  )}
                   {item.label}
                 </Link>
               );
@@ -111,9 +122,9 @@ export const MainLayout: React.FC = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <User size={20} className="text-gray-600" />
-                <span className="text-sm text-gray-700">{user.name}</span>
+                <span className="text-sm text-gray-700">{`${user.firstName} ${user.lastName}`}</span>
                 <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                  {user.role}
+                  {getUserPrimaryRole(user)}
                 </span>
               </div>
               <Button

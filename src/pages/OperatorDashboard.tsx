@@ -129,7 +129,9 @@ const OperatorDashboard: React.FC = () => {
       );
 
       // In a real app, this would make an API call
-      console.log(`Order ${orderId} assigned to ${user?.name}`);
+      console.log(
+        `Order ${orderId} assigned to ${user ? `${user.firstName} ${user.lastName}` : "Unknown User"}`
+      );
     } catch (error) {
       console.error("Failed to assign order:", error);
     }

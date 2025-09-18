@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { getUserPrimaryRole } from "../config/navigation";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -17,10 +18,11 @@ export const LoginPage: React.FC = () => {
   // Redirect if already authenticated
   if (user && !isLoading) {
     // Role-based redirection
-    switch (user.role) {
-      case "Admin":
+    const primaryRole = getUserPrimaryRole(user);
+    switch (primaryRole) {
+      case "Product Owner":
         return <Navigate to="/dashboard" replace />;
-      case "Manager":
+      case "Tenant Owner":
         return <Navigate to="/batches" replace />;
       case "Operator":
         return <Navigate to="/operator" replace />;
@@ -92,33 +94,10 @@ export const LoginPage: React.FC = () => {
                       <path d="M5.48 14.7c-.24-.72-.37-1.49-.37-2.3s.13-1.58.37-2.3V6.99H1.51C.55 8.91 0 11.19 0 12.4s.55 3.49 1.51 5.41l3.97-3.1z" />
                       <path d="M12.16 4.8c1.75 0 3.32.6 4.55 1.78l3.42-3.42C18.11 1.19 15.4 0 12.16 0 7.53 0 3.48 2.7 1.51 6.61l3.97 3.09c.94-2.82 3.57-4.9 6.68-4.9z" />
                     </svg>
-                    <span>Demo Login (Click to cycle roles)</span>
+                    <span>Sign in with Microsoft</span>
                   </>
                 )}
               </Button>
-            </div>
-
-            <div className="text-center text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-yellow-800 font-medium">🚧 Demo Mode Active</p>
-              <p className="text-yellow-700 text-xs mt-1">
-                Authentication is bypassed for testing. Click login to cycle
-                through different user roles.
-              </p>
-            </div>
-
-            <div className="text-center text-sm text-gray-600">
-              <p>Available test roles:</p>
-              <div className="flex justify-center space-x-4 mt-2">
-                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                  Admin
-                </span>
-                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
-                  Manager
-                </span>
-                <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">
-                  Operator
-                </span>
-              </div>
             </div>
           </CardContent>
         </Card>

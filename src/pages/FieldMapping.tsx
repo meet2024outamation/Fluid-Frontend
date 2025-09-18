@@ -1,14 +1,12 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Upload,
-  FileText,
-  ArrowRight,
   Check,
-  Plus,
   RefreshCw,
   AlertCircle,
+  Database,
+  Users,
+  CheckCircle,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -17,41 +15,33 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
-import { clientService, type ApiClient } from "../services/clientService";
+import { Modal } from "../components/ui/modal";
+import { projectService, type ApiProject } from "../services/projectService";
+import { schemaService, type Schema } from "../services/schemaService";
 import {
   fieldMappingService,
-  type Schema,
-  type SchemaField,
+  type FieldMappingItem,
+  type CreateBulkFieldMappingRequest,
+  type FieldMappingResponse,
 } from "../services/fieldMappingService";
 
-interface CSVColumn {
-  name: string;
-  index: number;
-  sampleValues: string[];
-}
-
-interface FieldMappingData {
-  id: string;
-  clientId: number;
-  schemaId: number;
-  inputField: string;
-  schemaField: SchemaField;
-  confidence: number;
-  isManualOverride: boolean;
-}
-
 const FieldMappingPage: React.FC = () => {
-  const [clients, setClients] = useState<ApiClient[]>([]);
-  const [schemas, setSchemas] = useState<Schema[]>([]);
-  const [selectedClient, setSelectedClient] = useState<ApiClient | null>(null);
-  const [selectedSchema, setSelectedSchema] = useState<Schema | null>(null);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvColumns, setCsvColumns] = useState<CSVColumn[]>([]);
-  const [fieldMappings, setFieldMappings] = useState<FieldMappingData[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
+  const [selectedProject, setSelectedProject] = useState<ApiProject | null>(
+    null
+  );
+  const [projectSchemasWithFields, setProjectSchemasWithFields] = useState<
+    Schema[]
+  >([]);
+  const [fieldMappings, setFieldMappings] = useState<{ [key: string]: string }>(
+    {}
+  );
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -62,14 +52,9 @@ const FieldMappingPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
-      // Load clients and schemas in parallel
-      const [clientsData, schemasData] = await Promise.all([
-        clientService.getAllClients(),
-        fieldMappingService.getSchemas(),
-      ]);
-
-      setClients(clientsData);
-      setSchemas(schemasData.filter((schema) => schema.isActive)); // Only show active schemas
+      // Load only projects initially
+      const projectsData = await projectService.getAllProjects();
+      setProjects(projectsData);
     } catch (error) {
       console.error("Failed to load initial data:", error);
       setError(
@@ -82,147 +67,149 @@ const FieldMappingPage: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type === "text/csv") {
-      setCsvFile(file);
-      processCSVFile(file);
-    }
-  };
-
-  const processCSVFile = async (file: File) => {
-    setIsProcessing(true);
+  const loadProjectSchemas = async (project: ApiProject) => {
     try {
-      const text = await file.text();
-      const lines = text.split("\n");
-      const headers = lines[0]
-        .split(",")
-        .map((h) => h.trim().replace(/"/g, ""));
+      setIsLoadingSchemas(true);
+      setError(null);
 
-      const columns: CSVColumn[] = headers.map((header, index) => ({
-        name: header,
-        index,
-        sampleValues: lines
-          .slice(1, 4)
-          .map((line) => {
-            const values = line.split(",");
-            return values[index]?.trim().replace(/"/g, "") || "";
-          })
-          .filter((v) => v),
-      }));
-
-      setCsvColumns(columns);
-      generateInitialMappings(columns);
-    } catch (error) {
-      console.error("Error processing CSV:", error);
-      setError("Failed to process CSV file");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const generateInitialMappings = (columns: CSVColumn[]) => {
-    if (!selectedClient || !selectedSchema) return;
-
-    const schemaFields = selectedSchema.schemaFields;
-    const mappings: FieldMappingData[] = columns.map((column) => {
-      // Simple matching logic - in production, this would be more sophisticated
-      const matchingField = schemaFields.find(
-        (field) =>
-          field.fieldName.toLowerCase().includes(column.name.toLowerCase()) ||
-          column.name.toLowerCase().includes(field.fieldName.toLowerCase()) ||
-          field.fieldLabel?.toLowerCase().includes(column.name.toLowerCase())
+      // Load schemas assigned to this project
+      const assignedSchemas = await schemaService.getSchemasByClientId(
+        project.id
       );
 
-      return {
-        id: `mapping_${column.index}`,
-        clientId: selectedClient.id,
-        schemaId: selectedSchema.id,
-        inputField: column.name,
-        schemaField: matchingField || schemaFields[0],
-        confidence: matchingField ? 0.85 : 0.3,
-        isManualOverride: false,
-      };
-    });
+      // Load full schema details with fields for each assigned schema
+      const schemasWithFields = await Promise.all(
+        assignedSchemas.map((schema) => schemaService.getSchemaById(schema.id))
+      );
+      setProjectSchemasWithFields(schemasWithFields);
 
-    setFieldMappings(mappings);
-  };
+      // Load existing field mappings for this project (with error handling)
+      let existingMappings: FieldMappingResponse[] = [];
+      try {
+        existingMappings = await fieldMappingService.getFieldMappings(
+          project.id
+        );
+        console.log("Loaded existing mappings:", existingMappings);
+      } catch (error) {
+        console.warn("Could not load existing field mappings:", error);
+        // Continue without existing mappings - this is not a critical error
+      }
 
-  const updateMapping = (mappingId: string, newSchemaField: SchemaField) => {
-    setFieldMappings((prev) =>
-      prev.map((mapping) =>
-        mapping.id === mappingId
-          ? {
-              ...mapping,
-              schemaField: newSchemaField,
-              isManualOverride: true,
-              confidence: 1.0,
-            }
-          : mapping
-      )
-    );
-  };
+      // Initialize field mappings object
+      const initialMappings: { [key: string]: string } = {};
+      schemasWithFields.forEach((schema) => {
+        schema.schemaFields.forEach((field) => {
+          const key = `${schema.id}_${field.id}`;
 
-  const confirmMapping = async () => {
-    if (!selectedClient || !selectedSchema) return;
+          // Check if there's an existing mapping for this field
+          const existingMapping = existingMappings.find(
+            (mapping) =>
+              mapping.schemaId === schema.id &&
+              mapping.schemaFieldId === field.id
+          );
 
-    try {
-      // Convert to API format
-      const fieldMappingItems = fieldMappings.map((mapping) => ({
-        schemaFieldId: mapping.schemaField.id,
-        inputField: mapping.inputField,
-        transformation: undefined, // Optional transformation
-      }));
-
-      await fieldMappingService.createBulkFieldMapping({
-        clientId: selectedClient.id,
-        schemaId: selectedSchema.id,
-        fieldMappings: fieldMappingItems,
+          initialMappings[key] = existingMapping?.inputField || "";
+        });
       });
-
-      alert("Field mapping saved successfully!");
+      setFieldMappings(initialMappings);
     } catch (error) {
-      console.error("Error saving mappings:", error);
-      setError("Failed to save field mappings");
+      console.error("Failed to load project schemas:", error);
+      setError("Failed to load schemas for this project");
+    } finally {
+      setIsLoadingSchemas(false);
     }
   };
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return "text-green-600 bg-green-50";
-    if (confidence >= 0.5) return "text-yellow-600 bg-yellow-50";
-    return "text-red-600 bg-red-50";
+  const handleProjectSelect = (project: ApiProject) => {
+    setSelectedProject(project);
+    loadProjectSchemas(project);
+  };
+
+  const handleFieldMappingChange = (
+    schemaId: number,
+    fieldId: number,
+    value: string
+  ) => {
+    const key = `${schemaId}_${fieldId}`;
+    setFieldMappings((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const handleSaveMappings = async () => {
+    if (!selectedProject) return;
+
+    try {
+      setIsSaving(true);
+      setSaveError(null);
+
+      // Group field mappings by schema
+      const mappingsBySchema: { [schemaId: number]: FieldMappingItem[] } = {};
+
+      Object.entries(fieldMappings).forEach(([key, value]) => {
+        if (value.trim()) {
+          // Only save non-empty mappings
+          const [schemaId, fieldId] = key.split("_").map(Number);
+          if (!mappingsBySchema[schemaId]) {
+            mappingsBySchema[schemaId] = [];
+          }
+          mappingsBySchema[schemaId].push({
+            schemaFieldId: fieldId,
+            inputField: value.trim(),
+          });
+        }
+      });
+
+      // Create bulk field mappings for each schema
+      const savePromises = Object.entries(mappingsBySchema).map(
+        ([schemaId, fieldMappings]) => {
+          const request: CreateBulkFieldMappingRequest = {
+            projectId: selectedProject.id,
+            schemaId: Number(schemaId),
+            fieldMappings,
+          };
+          console.log("Saving field mapping request:", request);
+          return fieldMappingService.createBulkFieldMapping(request);
+        }
+      );
+
+      console.log("Saving", savePromises.length, "schema mappings");
+      await Promise.all(savePromises);
+
+      // Show success modal
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Failed to save field mappings:", error);
+      let errorMessage = "Failed to save field mappings";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+
+      setSaveError(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-center p-8">
-          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-          Loading clients and schemas...
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading projects...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-red-500 mr-3 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-red-800">Error</h4>
-              <p className="text-sm text-red-600 mt-1">{error}</p>
-              <Button
-                onClick={loadInitialData}
-                variant="outline"
-                size="sm"
-                className="mt-2"
-              >
-                Try Again
-              </Button>
-            </div>
-          </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <p className="text-red-600">{error}</p>
         </div>
       </div>
     );
@@ -234,102 +221,51 @@ const FieldMappingPage: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Field Mapping</h1>
           <p className="text-muted-foreground">
-            Map CSV columns to standardized schema fields for data processing.
+            Select a client and configure field mappings for their assigned
+            schemas.
           </p>
         </div>
-        <Link to="/field-mapping/create">
-          <Button className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Create Field Mapping
-          </Button>
-        </Link>
       </div>
 
-      {/* Client Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Select Client
-          </CardTitle>
-          <CardDescription>
-            Choose the client for which you want to configure field mapping.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {clients.length === 0 ? (
-            <div className="text-center p-8 text-gray-500">
-              <p>No clients available. Please add clients first.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {clients.map((client) => (
-                <div
-                  key={client.id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                    selectedClient?.id === client.id
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
-                  }`}
-                  onClick={() => setSelectedClient(client)}
-                >
-                  <h3 className="font-semibold">{client.name}</h3>
-                  <p className="text-sm text-muted-foreground">{client.code}</p>
-                  <div className="mt-2">
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        client.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {client.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Schema Selection */}
-      {selectedClient && (
+      {!selectedProject ? (
+        // Project Selection Screen
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Select Schema
+              <Users className="h-5 w-5" />
+              Select Project
             </CardTitle>
             <CardDescription>
-              Choose the schema to map your CSV columns to.
+              Choose the project for which you want to configure field mappings.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {schemas.length === 0 ? (
+            {projects.length === 0 ? (
               <div className="text-center p-8 text-gray-500">
-                <p>
-                  No active schemas available. Please create a schema first.
-                </p>
+                <p>No projects available. Please add projects first.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {schemas.map((schema) => (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {projects.map((project) => (
                   <div
-                    key={schema.id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                      selectedSchema?.id === schema.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                    onClick={() => setSelectedSchema(schema)}
+                    key={project.id}
+                    className="p-4 border rounded-lg cursor-pointer transition-colors hover:border-primary/50 hover:bg-primary/5"
+                    onClick={() => handleProjectSelect(project)}
                   >
-                    <h3 className="font-semibold">{schema.name}</h3>
+                    <h3 className="font-semibold">{project.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {schema.description || "No description"}
+                      {project.code}
                     </p>
-                    <div className="mt-2 text-xs text-gray-500">
-                      {schema.schemaFields?.length || 0} fields
+                    <div className="mt-2">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          project.isActive
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {project.isActive ? "Active" : "Inactive"}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -337,195 +273,169 @@ const FieldMappingPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {/* CSV Upload */}
-      {selectedClient && selectedSchema && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Upload Sample CSV
-            </CardTitle>
-            <CardDescription>
-              Upload a sample CSV file to map its columns to your schema fields.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
+      ) : (
+        // Schema Fields Mapping Screen
+        <div className="space-y-6">
+          {/* Project Info Header */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    Project: {selectedProject.name}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Code: {selectedProject.code}
+                  </p>
+                </div>
                 <Button
-                  onClick={() => fileInputRef.current?.click()}
                   variant="outline"
-                  className="flex items-center gap-2"
+                  onClick={() => {
+                    setSelectedProject(null);
+                    setProjectSchemasWithFields([]);
+                    setFieldMappings({});
+                  }}
                 >
-                  <Upload className="h-4 w-4" />
-                  Choose CSV File
+                  Back to Project Selection
                 </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                {csvFile && (
-                  <span className="text-sm text-muted-foreground">
-                    {csvFile.name} ({(csvFile.size / 1024).toFixed(1)} KB)
-                  </span>
-                )}
               </div>
+            </CardContent>
+          </Card>
 
-              {isProcessing && (
-                <div className="text-sm text-muted-foreground">
-                  Processing CSV file...
-                </div>
-              )}
+          {isLoadingSchemas ? (
+            <div className="flex items-center justify-center h-32">
+              <RefreshCw className="h-6 w-6 animate-spin" />
+              <span className="ml-2">Loading schemas...</span>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Field Mapping Table */}
-      {csvColumns.length > 0 && selectedClient && selectedSchema && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ArrowRight className="h-5 w-5" />
-              Field Mapping
-            </CardTitle>
-            <CardDescription>
-              Map each CSV column to the appropriate schema field. High
-              confidence mappings are highlighted in green.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-semibold mb-3">CSV Columns</h4>
-                  <div className="space-y-2">
-                    {csvColumns.map((column) => (
-                      <div key={column.index} className="p-3 border rounded-lg">
-                        <div className="font-medium">{column.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          Sample: {column.sampleValues.slice(0, 2).join(", ")}
-                          {column.sampleValues.length > 2 && "..."}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold mb-3">Schema Fields</h4>
-                  <div className="space-y-2">
-                    {fieldMappings.map((mapping) => {
-                      const schemaFields = selectedSchema.schemaFields;
-                      return (
-                        <div key={mapping.id} className="p-3 border rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <select
-                              value={mapping.schemaField.id}
-                              onChange={(e) => {
-                                const field = schemaFields.find(
-                                  (f) => f.id === parseInt(e.target.value)
-                                );
-                                if (field) updateMapping(mapping.id, field);
-                              }}
-                              className="flex-1 p-2 border rounded"
-                            >
-                              {schemaFields.map((field) => (
-                                <option key={field.id} value={field.id}>
-                                  {field.fieldLabel || field.fieldName} (
-                                  {field.dataType})
-                                </option>
-                              ))}
-                            </select>
-                            <div
-                              className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getConfidenceColor(mapping.confidence)}`}
-                            >
-                              {Math.round(mapping.confidence * 100)}%
+          ) : projectSchemasWithFields.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Database className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">
+                  No schemas assigned to this project.
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Please assign schemas to this project first.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {/* Schema Fields grouped by Schema */}
+              {projectSchemasWithFields.map((schema) => (
+                <Card key={schema.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Database className="h-5 w-5" />
+                      {schema.name}
+                      <span className="text-sm font-normal text-gray-500">
+                        Version {schema.version}
+                      </span>
+                    </CardTitle>
+                    <CardDescription>
+                      {schema.description || "No description"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {schema.schemaFields
+                        .sort((a, b) => a.displayOrder - b.displayOrder)
+                        .map((field) => (
+                          <div
+                            key={field.id}
+                            className="flex items-center gap-4 p-3 border rounded-lg"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <label className="font-medium text-gray-900">
+                                  {field.fieldLabel}
+                                </label>
+                                {field.isRequired && (
+                                  <span className="text-red-500 text-sm">
+                                    *
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Field Name: {field.fieldName} | Type:{" "}
+                                {field.dataType}
+                                {field.format && ` | Format: ${field.format}`}
+                              </div>
+                            </div>
+                            <div className="w-64">
+                              <input
+                                type="text"
+                                placeholder="Enter mapping value"
+                                value={
+                                  fieldMappings[`${schema.id}_${field.id}`] ||
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  handleFieldMappingChange(
+                                    schema.id,
+                                    field.id,
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
                             </div>
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            Maps to: {mapping.inputField}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+                        ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
 
-              <div className="flex items-center justify-between pt-4 border-t">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-200 rounded"></div>
-                    High Confidence (80%+)
+              {/* Save Button and Error Handling */}
+              <div className="space-y-4">
+                {saveError && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                    <p className="text-red-700">{saveError}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-yellow-200 rounded"></div>
-                    Medium Confidence (50-79%)
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-200 rounded"></div>
-                    Low Confidence (&lt;50%)
-                  </div>
-                </div>
-                <Button
-                  onClick={confirmMapping}
-                  className="flex items-center gap-2"
-                >
-                  <Check className="h-4 w-4" />
-                  Confirm Mapping
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                )}
 
-      {/* Mapping Summary */}
-      {fieldMappings.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Mapping Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {fieldMappings.filter((m) => m.confidence >= 0.8).length}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  High Confidence
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-600">
-                  {
-                    fieldMappings.filter(
-                      (m) => m.confidence >= 0.5 && m.confidence < 0.8
-                    ).length
-                  }
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Medium Confidence
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">
-                  {fieldMappings.filter((m) => m.confidence < 0.5).length}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Low Confidence
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveMappings}
+                    disabled={isSaving}
+                    className="flex items-center gap-2"
+                  >
+                    {isSaving ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    {isSaving ? "Saving..." : "Save Field Mappings"}
+                  </Button>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       )}
+
+      {/* Success Modal */}
+      <Modal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="Field Mappings Saved Successfully"
+      >
+        <div className="text-center p-6">
+          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-green-800 mb-2">
+            Success!
+          </h3>
+          <p className="text-gray-600 mb-4">
+            Field mappings for project "{selectedProject?.name}" have been saved
+            successfully.
+          </p>
+          <p className="text-sm text-gray-500">
+            You can continue editing or select a different project.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 };

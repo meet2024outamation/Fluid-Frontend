@@ -19,7 +19,7 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { Modal } from "../components/ui/modal";
-import { clientService, type ApiClient } from "../services/clientService";
+import { projectService, type ApiProject } from "../services/projectService";
 import {
   fieldMappingService,
   type CreateBulkFieldMappingRequest,
@@ -29,15 +29,15 @@ import {
 
 const CreateFieldMapping: React.FC = () => {
   // State management
-  const [clients, setClients] = useState<ApiClient[]>([]);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
   const [schemas, setSchemas] = useState<Schema[]>([]);
-  const [selectedClient, setSelectedClient] = useState<number>(0);
+  const [selectedProject, setSelectedProject] = useState<number>(0);
   const [selectedSchema, setSelectedSchema] = useState<Schema | null>(null);
   const [fieldMappings, setFieldMappings] = useState<{ [key: number]: string }>(
     {}
   );
 
-  const [isLoadingClients, setIsLoadingClients] = useState(true);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,23 +45,23 @@ const CreateFieldMapping: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Load clients and schemas on component mount
+  // Load projects and schemas on component mount
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        setIsLoadingClients(true);
-        const [clientsData, schemasData] = await Promise.all([
-          clientService.getAllClients(),
+        setIsLoadingProjects(true);
+        const [projectsData, schemasData] = await Promise.all([
+          projectService.getAllProjects(),
           fieldMappingService.getSchemas(),
         ]);
 
-        setClients(clientsData.filter((client) => client.isActive));
+        setProjects(projectsData.filter((project) => project.isActive));
         setSchemas(schemasData.filter((schema) => schema.isActive));
       } catch (error) {
         console.error("Failed to load initial data:", error);
-        setSubmitError("Failed to load clients and schemas");
+        setSubmitError("Failed to load projects and schemas");
       } finally {
-        setIsLoadingClients(false);
+        setIsLoadingProjects(false);
       }
     };
 
@@ -97,10 +97,10 @@ const CreateFieldMapping: React.FC = () => {
     };
 
     loadSchemaDetails();
-  }, [selectedClient]);
+  }, [selectedProject]);
 
-  const handleClientChange = (clientId: number) => {
-    setSelectedClient(clientId);
+  const handleProjectChange = (projectId: number) => {
+    setSelectedProject(projectId);
     setSelectedSchema(null);
     setFieldMappings({});
     setValidationErrors([]);
@@ -142,8 +142,8 @@ const CreateFieldMapping: React.FC = () => {
   const validateForm = (): boolean => {
     const errors: string[] = [];
 
-    if (selectedClient <= 0) {
-      errors.push("Please select a client");
+    if (selectedProject <= 0) {
+      errors.push("Please select a project");
     }
 
     if (!selectedSchema || selectedSchema.id <= 0) {
@@ -193,7 +193,7 @@ const CreateFieldMapping: React.FC = () => {
         }));
 
       const request: CreateBulkFieldMappingRequest = {
-        clientId: selectedClient,
+        projectId: selectedProject,
         schemaId: selectedSchema!.id,
         fieldMappings: validMappings,
       };
@@ -203,7 +203,7 @@ const CreateFieldMapping: React.FC = () => {
 
       // Reset form after successful submission
       setTimeout(() => {
-        setSelectedClient(0);
+        setSelectedProject(0);
         setSelectedSchema(null);
         setFieldMappings({});
       }, 2000);
@@ -234,47 +234,49 @@ const CreateFieldMapping: React.FC = () => {
           Create Field Mappings
         </h1>
         <p className="text-muted-foreground mt-2">
-          Select a client and schema, then map your input fields to the schema
+          Select a project and schema, then map your input fields to the schema
           fields
         </p>
       </div>
 
       <div className="space-y-6">
-        {/* Step 1: Client and Schema Selection */}
+        {/* Step 1: Project and Schema Selection */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
               <Users className="h-5 w-5 mr-2" />
-              Step 1: Select Client and Schema
+              Step 1: Select Project and Schema
             </CardTitle>
             <CardDescription>
-              Choose the client and schema for which you want to create field
+              Choose the project and schema for which you want to create field
               mappings
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Client Selection */}
+              {/* Project Selection */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Client <span className="text-red-500">*</span>
+                  Project <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={selectedClient}
-                  onChange={(e) => handleClientChange(parseInt(e.target.value))}
+                  value={selectedProject}
+                  onChange={(e) =>
+                    handleProjectChange(parseInt(e.target.value))
+                  }
                   className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isLoadingClients}
+                  disabled={isLoadingProjects}
                 >
-                  {isLoadingClients ? (
-                    <option value={0}>Loading clients...</option>
-                  ) : clients.length === 0 ? (
-                    <option value={0}>No clients available</option>
+                  {isLoadingProjects ? (
+                    <option value={0}>Loading projects...</option>
+                  ) : projects.length === 0 ? (
+                    <option value={0}>No projects available</option>
                   ) : (
                     <>
-                      <option value={0}>Select a client</option>
-                      {clients.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.name} ({client.code})
+                      <option value={0}>Select a project</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name} ({project.code})
                         </option>
                       ))}
                     </>
@@ -291,7 +293,7 @@ const CreateFieldMapping: React.FC = () => {
                   value={selectedSchema?.id || 0}
                   onChange={(e) => handleSchemaChange(parseInt(e.target.value))}
                   className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={selectedClient === 0}
+                  disabled={selectedProject === 0}
                 >
                   <option value={0}>Select a schema</option>
                   {schemas.map((schema) => (
@@ -300,9 +302,9 @@ const CreateFieldMapping: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                {selectedClient === 0 && (
+                {selectedProject === 0 && (
                   <p className="text-sm text-gray-500 mt-1">
-                    Select a client first
+                    Select a project first
                   </p>
                 )}
               </div>
@@ -457,7 +459,7 @@ const CreateFieldMapping: React.FC = () => {
         )}
 
         {/* Empty State */}
-        {!selectedSchema && selectedClient === 0 && (
+        {!selectedSchema && selectedProject === 0 && (
           <Card>
             <CardContent className="text-center p-12">
               <FileText className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -465,7 +467,7 @@ const CreateFieldMapping: React.FC = () => {
                 Get Started with Field Mapping
               </h3>
               <p className="text-gray-600 mb-4">
-                Select a client and schema above to begin creating field
+                Select a project and schema above to begin creating field
                 mappings
               </p>
             </CardContent>
@@ -486,7 +488,7 @@ const CreateFieldMapping: React.FC = () => {
           </h3>
           <p className="text-gray-600 mb-4">
             Field mappings have been created successfully for the selected
-            client and schema.
+            project and schema.
           </p>
           <Button onClick={() => setShowSuccessModal(false)} className="mt-4">
             Continue

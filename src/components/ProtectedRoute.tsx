@@ -1,5 +1,6 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { getUserPrimaryRole } from "../config/navigation";
 import { useAuth } from "../contexts/AuthContext";
 import type { UserRole } from "../types";
 
@@ -27,17 +28,35 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requiredRoles && !requiredRoles.includes(user.role)) {
-    // Redirect to appropriate dashboard based on role
-    switch (user.role) {
-      case "Admin":
-        return <Navigate to="/dashboard" replace />;
-      case "Manager":
-        return <Navigate to="/batches" replace />;
-      case "Operator":
-        return <Navigate to="/operator" replace />;
-      default:
-        return <Navigate to="/login" replace />;
+  if (
+    requiredRoles &&
+    !requiredRoles.includes(getUserPrimaryRole(user) as UserRole)
+  ) {
+    // Handle legacy "Admin" role as equivalent to "Product Owner"
+    const userRoleString = getUserPrimaryRole(user);
+    const isAdminWithProductOwnerAccess =
+      userRoleString === "Admin" && requiredRoles.includes("Product Owner");
+
+    if (!isAdminWithProductOwnerAccess) {
+      // Show access denied message instead of redirecting to prevent infinite loops
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">
+              Access Denied
+            </h1>
+            <p className="text-gray-600 mb-4">
+              You don't have permission to access this page.
+            </p>
+            <p className="text-sm text-gray-500">
+              Your role: {getUserPrimaryRole(user)}
+            </p>
+            <p className="text-xs text-gray-400 mt-2">
+              Required roles: {requiredRoles.join(", ")}
+            </p>
+          </div>
+        </div>
+      );
     }
   }
 

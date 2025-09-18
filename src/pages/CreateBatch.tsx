@@ -21,7 +21,7 @@ import {
 } from "../components/ui/card";
 import type { CreateBatchFormData, BatchCreationStep } from "../types";
 import { batchService } from "../services/batchService";
-import { clientService, type ApiClient } from "../services/clientService";
+import { projectService, type ApiProject } from "../services/projectService";
 
 const CreateBatch: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -29,14 +29,14 @@ const CreateBatch: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Client-related state
-  const [clients, setClients] = useState<ApiClient[]>([]);
-  const [isLoadingClients, setIsLoadingClients] = useState(true);
-  const [clientsError, setClientsError] = useState<string | null>(null);
+  // Project-related state
+  const [projects, setProjects] = useState<ApiProject[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<CreateBatchFormData>({
     fileName: "",
-    clientId: 0, // Will be set when clients are loaded
+    projectId: 0, // Will be set when projects are loaded
     name: "",
     description: "",
     metadataFile: null,
@@ -50,38 +50,38 @@ const CreateBatch: React.FC = () => {
   const metadataFileRef = useRef<HTMLInputElement>(null);
   const documentsFileRef = useRef<HTMLInputElement>(null);
 
-  // Fetch clients on component mount
+  // Fetch projects on component mount
   useEffect(() => {
-    const fetchClients = async () => {
-      setIsLoadingClients(true);
-      setClientsError(null);
+    const fetchProjects = async () => {
+      setIsLoadingProjects(true);
+      setProjectsError(null);
 
       try {
-        const fetchedClients = await clientService.getAllClients();
-        setClients(fetchedClients);
+        const fetchedProjects = await projectService.getAllProjects();
+        setProjects(fetchedProjects);
 
-        // Set default client if available and no client is selected (only active clients)
-        const activeClients = fetchedClients.filter(
-          (client) => client.isActive
+        // Set default project if available and no project is selected (only active projects)
+        const activeProjects = fetchedProjects.filter(
+          (project) => project.isActive
         );
-        if (activeClients.length > 0) {
+        if (activeProjects.length > 0) {
           setFormData((prev) => {
-            if (prev.clientId === 0) {
-              return { ...prev, clientId: activeClients[0].id };
+            if (prev.projectId === 0) {
+              return { ...prev, projectId: activeProjects[0].id };
             }
             return prev;
           });
         }
       } catch (error) {
-        setClientsError(
-          error instanceof Error ? error.message : "Failed to fetch clients"
+        setProjectsError(
+          error instanceof Error ? error.message : "Failed to fetch projects"
         );
       } finally {
-        setIsLoadingClients(false);
+        setIsLoadingProjects(false);
       }
     };
 
-    fetchClients();
+    fetchProjects();
   }, []);
 
   const steps: BatchCreationStep[] = [
@@ -115,8 +115,8 @@ const CreateBatch: React.FC = () => {
       errors.name = ["Batch name is required"];
     }
 
-    if (formData.clientId <= 0) {
-      errors.clientId = ["Please select a valid client"];
+    if (formData.projectId <= 0) {
+      errors.projectId = ["Please select a valid project"];
     }
 
     setValidationErrors(errors);
@@ -216,7 +216,7 @@ const CreateBatch: React.FC = () => {
     try {
       const request = {
         fileName: formData.fileName,
-        clientId: formData.clientId,
+        projectId: formData.projectId,
         name: formData.name,
         description: formData.description || undefined,
         metadataFile: formData.metadataFile!,
@@ -232,7 +232,7 @@ const CreateBatch: React.FC = () => {
       setTimeout(() => {
         setFormData({
           fileName: "",
-          clientId: 1,
+          projectId: 1,
           name: "",
           description: "",
           metadataFile: null,
@@ -356,50 +356,50 @@ const CreateBatch: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Client <span className="text-red-500">*</span>
+                  Project <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.clientId}
+                  value={formData.projectId}
                   onChange={(e) =>
-                    handleInputChange("clientId", parseInt(e.target.value))
+                    handleInputChange("projectId", parseInt(e.target.value))
                   }
                   className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isLoadingClients}
+                  disabled={isLoadingProjects}
                 >
-                  {isLoadingClients ? (
-                    <option value={0}>Loading clients...</option>
-                  ) : clientsError ? (
-                    <option value={0}>Error loading clients</option>
-                  ) : clients.length === 0 ? (
-                    <option value={0}>No clients available</option>
+                  {isLoadingProjects ? (
+                    <option value={0}>Loading projects...</option>
+                  ) : projectsError ? (
+                    <option value={0}>Error loading projects</option>
+                  ) : projects.length === 0 ? (
+                    <option value={0}>No projects available</option>
                   ) : (
                     <>
-                      <option value={0}>Select a client</option>
-                      {clients
-                        .filter((client) => client.isActive)
-                        .map((client) => (
-                          <option key={client.id} value={client.id}>
-                            {client.name} ({client.code})
+                      <option value={0}>Select a project</option>
+                      {projects
+                        .filter((project) => project.isActive)
+                        .map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.name} ({project.code})
                           </option>
                         ))}
                     </>
                   )}
                 </select>
-                {validationErrors.clientId && (
+                {validationErrors.projectId && (
                   <div className="mt-1 text-sm text-red-600">
-                    {validationErrors.clientId[0]}
+                    {validationErrors.projectId[0]}
                   </div>
                 )}
-                {clientsError && (
+                {projectsError && (
                   <div className="mt-1 text-sm text-red-600 flex items-center">
                     <AlertCircle className="h-4 w-4 mr-1" />
-                    {clientsError}
+                    {projectsError}
                   </div>
                 )}
-                {isLoadingClients && (
+                {isLoadingProjects && (
                   <div className="mt-1 text-sm text-blue-600 flex items-center">
                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    Loading clients...
+                    Loading projects...
                   </div>
                 )}
               </div>
@@ -591,16 +591,16 @@ const CreateBatch: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-gray-600">
-                      Client
+                      Project
                     </div>
                     <div className="font-medium">
                       {(() => {
-                        const selectedClient = clients.find(
-                          (c) => c.id === formData.clientId
+                        const selectedProject = projects.find(
+                          (c) => c.id === formData.projectId
                         );
-                        return selectedClient
-                          ? `${selectedClient.name} (${selectedClient.code})`
-                          : `Client ID: ${formData.clientId}`;
+                        return selectedProject
+                          ? `${selectedProject.name} (${selectedProject.code})`
+                          : `Project ID: ${formData.projectId}`;
                       })()}
                     </div>
                   </div>

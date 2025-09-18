@@ -6,6 +6,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { DefaultRedirect } from "./components/DefaultRedirect";
 import { MainLayout } from "./components/layout/MainLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { AdminDashboard } from "./pages/AdminDashboard";
@@ -13,10 +14,13 @@ import FieldMapping from "./pages/FieldMapping";
 import CreateFieldMapping from "./pages/CreateFieldMapping";
 import SchemaManagement from "./pages/SchemaManagement";
 import SchemaForm from "./pages/SchemaForm";
-import ClientManagement from "./pages/ClientManagement";
-import ClientForm from "./pages/ClientForm";
+import ProjectManagement from "./pages/ProjectManagement";
+import ProjectForm from "./pages/ProjectForm";
 import CreateBatch from "./pages/CreateBatch";
+import BatchManagement from "./pages/BatchManagement";
 import OperatorDashboard from "./pages/OperatorDashboard";
+import UserManagement from "./components/UserManagement";
+import TenantManagement from "./components/TenantManagement";
 import "./App.css";
 
 function App() {
@@ -36,49 +40,69 @@ function App() {
               </ProtectedRoute>
             }
           >
-            {/* Admin Routes */}
+            {/* Default redirect for authenticated users */}
+            <Route index element={<DefaultRedirect />} />
+
+            {/* Product Owner & Tenant Owner Routes */}
             <Route
               path="dashboard"
               element={
-                <ProtectedRoute requiredRoles={["Admin", "Manager"]}>
+                <ProtectedRoute
+                  requiredRoles={["Product Owner", "Tenant Owner"]}
+                >
                   <AdminDashboard />
                 </ProtectedRoute>
               }
             />
 
-            {/* Manager Routes */}
+            {/* Product Owner & Tenant Owner Routes */}
             <Route
               path="batches"
               element={
-                <ProtectedRoute requiredRoles={["Admin", "Manager"]}>
+                <ProtectedRoute
+                  requiredRoles={["Product Owner", "Tenant Owner"]}
+                >
+                  <BatchManagement />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="batches/create"
+              element={
+                <ProtectedRoute
+                  requiredRoles={["Product Owner", "Tenant Owner"]}
+                >
                   <CreateBatch />
                 </ProtectedRoute>
               }
             />
 
             <Route
-              path="clients"
+              path="projects"
               element={
-                <ProtectedRoute requiredRoles={["Admin", "Manager"]}>
-                  <ClientManagement />
+                <ProtectedRoute
+                  requiredRoles={["Product Owner", "Tenant Owner"]}
+                >
+                  <ProjectManagement />
                 </ProtectedRoute>
               }
             />
 
             <Route
-              path="clients/create"
+              path="projects/create"
               element={
-                <ProtectedRoute requiredRoles={["Admin"]}>
-                  <ClientForm />
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
+                  <ProjectForm />
                 </ProtectedRoute>
               }
             />
 
             <Route
-              path="clients/edit/:id"
+              path="projects/edit/:id"
               element={
-                <ProtectedRoute requiredRoles={["Admin"]}>
-                  <ClientForm />
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
+                  <ProjectForm />
                 </ProtectedRoute>
               }
             />
@@ -86,7 +110,7 @@ function App() {
             <Route
               path="schemas"
               element={
-                <ProtectedRoute requiredRoles={["Admin"]}>
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
                   <SchemaManagement />
                 </ProtectedRoute>
               }
@@ -95,7 +119,7 @@ function App() {
             <Route
               path="schemas/create"
               element={
-                <ProtectedRoute requiredRoles={["Admin"]}>
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
                   <SchemaForm />
                 </ProtectedRoute>
               }
@@ -104,7 +128,7 @@ function App() {
             <Route
               path="schemas/edit/:id"
               element={
-                <ProtectedRoute requiredRoles={["Admin"]}>
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
                   <SchemaForm />
                 </ProtectedRoute>
               }
@@ -113,7 +137,9 @@ function App() {
             <Route
               path="field-mapping"
               element={
-                <ProtectedRoute requiredRoles={["Admin", "Manager"]}>
+                <ProtectedRoute
+                  requiredRoles={["Product Owner", "Tenant Owner"]}
+                >
                   <FieldMapping />
                 </ProtectedRoute>
               }
@@ -122,8 +148,29 @@ function App() {
             <Route
               path="field-mapping/create"
               element={
-                <ProtectedRoute requiredRoles={["Admin", "Manager"]}>
+                <ProtectedRoute
+                  requiredRoles={["Product Owner", "Tenant Owner"]}
+                >
                   <CreateFieldMapping />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Product Owner Only Routes */}
+            <Route
+              path="users"
+              element={
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
+                  <UserManagement />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="tenants"
+              element={
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
+                  <TenantManagement />
                 </ProtectedRoute>
               }
             />
@@ -156,7 +203,7 @@ function App() {
             <Route
               path="settings"
               element={
-                <ProtectedRoute requiredRoles={["Admin"]}>
+                <ProtectedRoute requiredRoles={["Product Owner"]}>
                   <div className="p-8 text-center">
                     <h1 className="text-2xl font-bold mb-4">Settings</h1>
                     <p className="text-gray-600">Coming soon...</p>
