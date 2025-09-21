@@ -11,6 +11,7 @@ import {
   FileCheck,
   FolderOpen,
 } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -19,11 +20,25 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
+import { useTenantSelection } from "../contexts/TenantSelectionContext";
 import type { CreateBatchFormData, BatchCreationStep } from "../types";
 import { batchService } from "../services/batchService";
 import { projectService, type ApiProject } from "../services/projectService";
 
 const CreateBatch: React.FC = () => {
+  const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
+    useTenantSelection();
+
+  // Redirect tenant admin users to tenant selection if they haven't selected a tenant
+  if (isTenantAdmin && needsTenantSelection) {
+    return <Navigate to="/tenant-selection" replace />;
+  }
+
+  // Redirect if project selection is needed
+  if (needsProjectSelection) {
+    return <Navigate to="/project-selection" replace />;
+  }
+
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);

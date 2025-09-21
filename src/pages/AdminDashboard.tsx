@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Users,
   Package,
@@ -20,8 +20,21 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { Button } from "../components/ui/button";
+import { useTenantSelection } from "../contexts/TenantSelectionContext";
 
 export const AdminDashboard: React.FC = () => {
+  const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
+    useTenantSelection();
+
+  // Redirect tenant admin users to tenant selection if they haven't selected a tenant
+  if (isTenantAdmin && needsTenantSelection) {
+    return <Navigate to="/tenant-selection" replace />;
+  }
+
+  // Redirect if project selection is needed
+  if (needsProjectSelection) {
+    return <Navigate to="/project-selection" replace />;
+  }
   // Mock data - in real app, this would come from API
   const stats = {
     totalProjects: 24,

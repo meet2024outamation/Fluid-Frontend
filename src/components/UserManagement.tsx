@@ -8,6 +8,11 @@ import {
 } from "./ui/card";
 import { Button } from "./ui/button";
 import {
+  userSchema,
+  validateSingleField,
+  type UserFormData,
+} from "../utils/validation";
+import {
   Plus,
   Search,
   Edit,
@@ -29,8 +34,10 @@ import type {
 } from "../types";
 import { userService, type UserFilters } from "../services/userService.ts";
 import { dropdownService } from "../services/dropdownService.ts";
+import { useAuth } from "../contexts/AuthContext";
 
 const UserManagement: React.FC = () => {
+  const { user: currentUser, accessibleTenants } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -44,21 +51,23 @@ const UserManagement: React.FC = () => {
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Dropdown data state
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
   const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
+  const [dropdownsLoaded, setDropdownsLoaded] = useState(false);
 
   // Role assignment state for create/edit form
   const [selectedRoles, setSelectedRoles] = useState<ProjectRole[]>([]);
   const [newRole, setNewRole] = useState<{
-    tenantId: string;
-    projectId: number;
+    tenantIds: string[];
+    projectIds: number[];
     roleId: number;
   }>({
-    tenantId: "",
-    projectId: 0,
+    tenantIds: [],
+    projectIds: [],
     roleId: 0,
   });
 
@@ -71,24 +80,61 @@ const UserManagement: React.FC = () => {
     roles: [],
   });
 
+  // Validation state
+  const [validationErrors, setValidationErrors] = useState<{
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    roleId?: string;
+  }>({});
+
   useEffect(() => {
-    loadData();
-    loadDropdownData();
-  }, []);
+    if (!dataLoaded) {
+      loadData();
+    }
+  }, [dataLoaded]);
+
+  useEffect(() => {
+    if (
+      (isCreateDialogOpen || isEditDialogOpen) &&
+      !dropdownsLoaded &&
+      currentUser
+    ) {
+      loadDropdownData();
+    }
+  }, [isCreateDialogOpen, isEditDialogOpen, dropdownsLoaded, currentUser]);
+
+  // Handle body overflow when modals are open
+  useEffect(() => {
+    if (isCreateDialogOpen || isEditDialogOpen || isViewDialogOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.paddingRight = "15px";
+    } else {
+      document.body.style.overflow = "unset";
+      document.body.style.paddingRight = "0px";
+    }
+
+    // Cleanup function to reset styles
+    return () => {
+      document.body.style.overflow = "unset";
+      document.body.style.paddingRight = "0px";
+    };
+  }, [isCreateDialogOpen, isEditDialogOpen, isViewDialogOpen]);
 
   const loadDropdownData = async () => {
     try {
       const [tenants, projects, roles] = await Promise.all([
         dropdownService.getTenantOptions(),
-        dropdownService.getProjectOptions(),
+        dropdownService.getProjectOptions(undefined, accessibleTenants),
         dropdownService.getRoleOptions(),
       ]);
 
       setTenantOptions(tenants);
       setProjectOptions(projects);
       setRoleOptions(roles);
+      setDropdownsLoaded(true);
     } catch (error: any) {
-      console.error("Failed to load dropdown data:", error);
+      setError(error.message || "Failed to load dropdown data");
     }
   };
 
@@ -96,6 +142,7 @@ const UserManagement: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+
       const [usersData, statsData] = await Promise.all([
         userService.getUsers(),
         userService.getUserStats(),
@@ -103,6 +150,7 @@ const UserManagement: React.FC = () => {
 
       setUsers(usersData);
       setStats(statsData);
+      setDataLoaded(true);
     } catch (error: any) {
       setError(error.message || "Failed to load data");
     } finally {
@@ -112,22 +160,55 @@ const UserManagement: React.FC = () => {
 
   // Role management helper functions
   const addRole = () => {
-    if (newRole.tenantId && newRole.projectId && newRole.roleId) {
-      const roleExists = selectedRoles.some(
-        (role) =>
-          role.tenantId === newRole.tenantId &&
-          role.projectId === newRole.projectId &&
-          role.roleId === newRole.roleId
-      );
+    // Validate based on role type
+    const isProductOwner = newRole.roleId === 1;
+    const isTenantAdmin = newRole.roleId === 2;
 
-      if (!roleExists) {
-        setSelectedRoles([...selectedRoles, { ...newRole }]);
-        setNewRole({
-          tenantId: "",
-          projectId: 0,
-          roleId: 0,
+    // Check if required fields are filled based on role
+    const isValid =
+      newRole.roleId > 0 &&
+      (isProductOwner || newRole.tenantIds.length > 0) &&
+      (isProductOwner || isTenantAdmin || newRole.projectIds.length > 0);
+
+    if (isValid) {
+      if (isProductOwner) {
+        // For Product Owner, create a single role entry with null values
+        const newProjectRole: ProjectRole = {
+          roleId: newRole.roleId,
+          tenantId: null, // Product Owner doesn't need tenant
+          projectId: null, // Product Owner doesn't need project
+        };
+        setSelectedRoles([...selectedRoles, newProjectRole]);
+      } else if (isTenantAdmin) {
+        // For Tenant Admin, add role for each selected tenant with null projectId
+        newRole.tenantIds.forEach((tenantId) => {
+          const newProjectRole: ProjectRole = {
+            roleId: newRole.roleId,
+            tenantId: tenantId,
+            projectId: null, // Tenant Admin doesn't need project
+          };
+          setSelectedRoles((prev) => [...prev, newProjectRole]);
+        });
+      } else {
+        // For other roles, add role for each combination of selected tenants and projects
+        newRole.tenantIds.forEach((tenantId) => {
+          newRole.projectIds.forEach((projectId) => {
+            const newProjectRole: ProjectRole = {
+              roleId: newRole.roleId,
+              tenantId: tenantId,
+              projectId: projectId,
+            };
+            setSelectedRoles((prev) => [...prev, newProjectRole]);
+          });
         });
       }
+
+      // Reset the form
+      setNewRole({
+        tenantIds: [],
+        projectIds: [],
+        roleId: 0,
+      });
     }
   };
 
@@ -135,14 +216,66 @@ const UserManagement: React.FC = () => {
     setSelectedRoles(selectedRoles.filter((_, i) => i !== index));
   };
 
-  const getTenantName = (tenantId: string) => {
+  const getTenantName = (tenantId: string | null) => {
+    if (!tenantId) return "N/A";
     const tenant = tenantOptions.find((t) => t.id === tenantId);
     return tenant?.name || tenantId;
   };
 
-  const getProjectName = (projectId: number) => {
+  const getProjectName = (projectId: number | null) => {
+    if (!projectId) return "N/A";
     const project = projectOptions.find((p) => p.id === projectId);
     return project?.name || `Project ${projectId}`;
+  };
+
+  // Helper function to get projects for selected tenants
+  const getFilteredProjects = () => {
+    if (newRole.tenantIds.length === 0) {
+      return [];
+    }
+    const filtered = projectOptions.filter((project) =>
+      newRole.tenantIds.includes(project.tenantId)
+    );
+    console.log("Filtering projects:", {
+      selectedTenantIds: newRole.tenantIds,
+      allProjects: projectOptions,
+      filteredProjects: filtered,
+    });
+    return filtered;
+  };
+
+  // Helper function to handle tenant selection
+  const handleTenantSelection = (tenantId: string, isSelected: boolean) => {
+    if (isSelected) {
+      setNewRole((prev) => ({
+        ...prev,
+        tenantIds: [...prev.tenantIds, tenantId],
+      }));
+    } else {
+      setNewRole((prev) => ({
+        ...prev,
+        tenantIds: prev.tenantIds.filter((id) => id !== tenantId),
+        projectIds: prev.projectIds.filter((projectId) => {
+          const project = projectOptions.find((p) => p.id === projectId);
+          return project?.tenantId !== tenantId;
+        }),
+      }));
+    }
+  };
+
+  // Helper function to handle project selection
+  const handleProjectSelection = (projectId: number, isSelected: boolean) => {
+    if (isSelected) {
+      setNewRole((prev) => ({
+        ...prev,
+        projectIds: [...prev.projectIds, projectId],
+      }));
+    } else {
+      setNewRole((prev) => ({
+        ...prev,
+        projectIds: prev.projectIds.filter((id) => id !== projectId),
+      }));
+    }
   };
 
   const getRoleName = (roleId: number) => {
@@ -169,10 +302,48 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  // Validation functions using Zod
+  const validateForm = () => {
+    try {
+      const userFormData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        roleId: selectedRoles.length > 0 ? selectedRoles[0].roleId : 0,
+      };
+      userSchema.parse(userFormData);
+      setValidationErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof Error && "issues" in error) {
+        const zodError = error as any;
+        const errors: typeof validationErrors = {};
+
+        zodError.issues.forEach((issue: any) => {
+          const field = issue.path[0];
+          if (field in errors) {
+            errors[field as keyof typeof errors] = issue.message;
+          }
+        });
+
+        setValidationErrors(errors);
+      }
+      return false;
+    }
+  };
+
+  // Validate individual field on change
+  const validateFieldOnChange = (fieldName: keyof UserFormData, value: any) => {
+    const error = validateSingleField(userSchema, fieldName, value);
+    setValidationErrors((prev) => ({
+      ...prev,
+      [fieldName]: error,
+    }));
+  };
+
   const handleCreateUser = async () => {
     try {
-      if (!formData.email || !formData.firstName || !formData.lastName) {
-        setError("Please fill in all required fields");
+      if (!validateForm()) {
         return;
       }
 
@@ -191,8 +362,10 @@ const UserManagement: React.FC = () => {
         isActive: true,
         roles: [],
       });
+      setValidationErrors({});
       setSelectedRoles([]);
       loadData();
+      setDataLoaded(false); // Allow fresh data reload
       setError(null);
     } catch (error: any) {
       setError(error.message || "Failed to create user");
@@ -207,7 +380,6 @@ const UserManagement: React.FC = () => {
         !formData.firstName ||
         !formData.lastName
       ) {
-        setError("Please fill in all required fields");
         return;
       }
 
@@ -229,6 +401,7 @@ const UserManagement: React.FC = () => {
       });
       setSelectedRoles([]);
       loadData();
+      setDataLoaded(false); // Allow fresh data reload
       setError(null);
     } catch (error: any) {
       setError(error.message || "Failed to update user");
@@ -243,6 +416,7 @@ const UserManagement: React.FC = () => {
     try {
       await userService.deleteUser(userId);
       loadData();
+      setDataLoaded(false); // Allow fresh data reload
       setError(null);
     } catch (error: any) {
       setError(error.message || "Failed to delete user");
@@ -261,6 +435,7 @@ const UserManagement: React.FC = () => {
       };
       await userService.updateUser(user.id, updateData);
       loadData();
+      setDataLoaded(false); // Allow fresh data reload
       setError(null);
     } catch (error: any) {
       setError(error.message || "Failed to update user status");
@@ -313,10 +488,7 @@ const UserManagement: React.FC = () => {
   if (loading && users.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading users...</p>
-        </div>
+        <div className="text-lg">Loading...</div>
       </div>
     );
   }
@@ -414,6 +586,7 @@ const UserManagement: React.FC = () => {
                 onClick={() => {
                   setSearchTerm("");
                   setStatusFilter("all");
+                  setDataLoaded(false); // Allow fresh data reload
                   loadData();
                 }}
               >
@@ -446,6 +619,7 @@ const UserManagement: React.FC = () => {
                   <th className="text-left p-2 font-medium">Name</th>
                   <th className="text-left p-2 font-medium">Email</th>
                   <th className="text-left p-2 font-medium">Phone</th>
+                  <th className="text-left p-2 font-medium">Roles</th>
                   <th className="text-left p-2 font-medium">Status</th>
                   <th className="text-left p-2 font-medium">Created</th>
                   <th className="text-left p-2 font-medium">Actions</th>
@@ -457,6 +631,40 @@ const UserManagement: React.FC = () => {
                     <td className="p-2 font-medium">{`${user.firstName} ${user.lastName}`}</td>
                     <td className="p-2">{user.email}</td>
                     <td className="p-2">{user.phone || "-"}</td>
+                    <td className="p-2">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {user.roles && user.roles.length > 0 ? (
+                          user.roles.slice(0, 2).map((role, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                              title={`${getRoleName(role.roleId)}${role.tenantId ? ` - ${getTenantName(role.tenantId)}` : ""}${role.projectId ? ` - ${getProjectName(role.projectId)}` : ""}`}
+                            >
+                              {getRoleName(role.roleId)}
+                              {role.tenantId && (
+                                <span className="ml-1 text-blue-600">
+                                  (
+                                  {getTenantName(role.tenantId).substring(0, 8)}
+                                  {getTenantName(role.tenantId).length > 8
+                                    ? "..."
+                                    : ""}
+                                  )
+                                </span>
+                              )}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400 text-xs">
+                            No roles
+                          </span>
+                        )}
+                        {user.roles && user.roles.length > 2 && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                            +{user.roles.length - 2} more
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-2">
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -522,8 +730,8 @@ const UserManagement: React.FC = () => {
 
       {/* Create User Modal */}
       {isCreateDialogOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 modal-backdrop">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
             <h2 className="text-xl font-bold mb-4">Create New User</h2>
             <div className="space-y-4">
               <div>
@@ -533,16 +741,28 @@ const UserManagement: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Enter first name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.firstName
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.firstName}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value;
                     setFormData((prev) => ({
                       ...prev,
-                      firstName: e.target.value,
-                    }))
-                  }
+                      firstName: value,
+                    }));
+                    validateFieldOnChange("firstName", value);
+                  }}
                 />
+                {validationErrors.firstName && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.firstName}
+                  </p>
+                )}
               </div>
+
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Last Name *
@@ -550,16 +770,28 @@ const UserManagement: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Enter last name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.lastName
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.lastName}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value;
                     setFormData((prev) => ({
                       ...prev,
-                      lastName: e.target.value,
-                    }))
-                  }
+                      lastName: value,
+                    }));
+                    validateFieldOnChange("lastName", value);
+                  }}
                 />
+                {validationErrors.lastName && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.lastName}
+                  </p>
+                )}
               </div>
+
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Email Address *
@@ -567,25 +799,46 @@ const UserManagement: React.FC = () => {
                 <input
                   type="email"
                   placeholder="Enter email address"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.email
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, email: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData((prev) => ({
+                      ...prev,
+                      email: value,
+                    }));
+                    validateFieldOnChange("email", value);
+                  }}
                 />
+                {validationErrors.email && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.email}
+                  </p>
+                )}
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">Phone</label>
+                <label className="block text-sm font-medium mb-1">
+                  Phone Number (Optional)
+                </label>
                 <input
-                  type="text"
+                  type="tel"
                   placeholder="Enter phone number"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.phone}
+                  value={formData.phone || ""}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
+                    setFormData((prev) => ({
+                      ...prev,
+                      phone: e.target.value,
+                    }))
                   }
                 />
               </div>
+
               <div>
                 <label className="flex items-center space-x-2">
                   <input
@@ -603,58 +856,14 @@ const UserManagement: React.FC = () => {
                 </label>
               </div>
 
-              {/* Role Assignment Section */}
+              {/* Role Assignment Section for Create Modal */}
               <div className="border-t pt-4">
                 <h3 className="text-lg font-medium mb-3">Role Assignments</h3>
 
                 {/* Add New Role */}
                 <div className="bg-gray-50 p-4 rounded-md mb-4">
                   <h4 className="text-sm font-medium mb-3">Add Role</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Tenant *
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={newRole.tenantId}
-                        onChange={(e) =>
-                          setNewRole((prev) => ({
-                            ...prev,
-                            tenantId: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Select Tenant</option>
-                        {tenantOptions.map((tenant) => (
-                          <option key={tenant.id} value={tenant.id}>
-                            {tenant.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Project *
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={newRole.projectId}
-                        onChange={(e) =>
-                          setNewRole((prev) => ({
-                            ...prev,
-                            projectId: Number(e.target.value),
-                          }))
-                        }
-                      >
-                        <option value={0}>Select Project</option>
-                        {projectOptions.map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Role *
@@ -666,6 +875,8 @@ const UserManagement: React.FC = () => {
                           setNewRole((prev) => ({
                             ...prev,
                             roleId: Number(e.target.value),
+                            tenantIds: [],
+                            projectIds: [],
                           }))
                         }
                       >
@@ -677,19 +888,134 @@ const UserManagement: React.FC = () => {
                         ))}
                       </select>
                     </div>
+
+                    {/* Show tenant selection for Tenant Admin (id: 2) and other roles except Product Owner (id: 1) */}
+                    {newRole.roleId !== 0 && newRole.roleId !== 1 && (
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Tenants *
+                        </label>
+                        <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+                          {tenantOptions.map((tenant) => (
+                            <label
+                              key={tenant.id}
+                              className="flex items-center space-x-2 p-1 hover:bg-gray-50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={newRole.tenantIds.includes(tenant.id)}
+                                onChange={(e) =>
+                                  handleTenantSelection(
+                                    tenant.id,
+                                    e.target.checked
+                                  )
+                                }
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm">{tenant.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {newRole.tenantIds.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-gray-600">
+                              Selected:{" "}
+                              {newRole.tenantIds
+                                .map(
+                                  (id) =>
+                                    tenantOptions.find((t) => t.id === id)?.name
+                                )
+                                .join(", ")}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Show project selection only for roles other than Product Owner (id: 1) and Tenant Admin (id: 2) */}
+                    {newRole.roleId !== 0 &&
+                      newRole.roleId !== 1 &&
+                      newRole.roleId !== 2 && (
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            Projects *
+                          </label>
+                          <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+                            {getFilteredProjects().map((project) => (
+                              <label
+                                key={project.id}
+                                className="flex items-start space-x-3 p-3 hover:bg-gray-50 cursor-pointer rounded-md border-b border-gray-100 last:border-b-0"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={newRole.projectIds.includes(
+                                    project.id
+                                  )}
+                                  onChange={(e) =>
+                                    handleProjectSelection(
+                                      project.id,
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {project.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    <span className="font-medium">Tenant:</span>{" "}
+                                    {getTenantName(project.tenantId)}
+                                  </div>
+                                </div>
+                              </label>
+                            ))}
+                            {getFilteredProjects().length === 0 && (
+                              <div className="text-sm text-gray-500 italic p-3 text-center">
+                                No projects available for selected tenants
+                              </div>
+                            )}
+                          </div>
+                          {newRole.projectIds.length > 0 && (
+                            <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                              <p className="text-xs text-blue-800 font-medium mb-1">
+                                Selected Projects:
+                              </p>
+                              <div className="text-xs text-blue-700">
+                                {newRole.projectIds
+                                  .map((id) => {
+                                    const project = projectOptions.find(
+                                      (p) => p.id === id
+                                    );
+                                    return project
+                                      ? `${project.name} (${getTenantName(project.tenantId)})`
+                                      : `Project ${id}`;
+                                  })
+                                  .join(", ")}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                   </div>
+
                   <Button
                     onClick={addRole}
                     className="mt-3"
                     disabled={
-                      !newRole.tenantId || !newRole.projectId || !newRole.roleId
+                      !newRole.roleId ||
+                      (newRole.roleId !== 1 &&
+                        newRole.tenantIds.length === 0) ||
+                      (newRole.roleId !== 1 &&
+                        newRole.roleId !== 2 &&
+                        newRole.projectIds.length === 0)
                     }
                   >
                     Add Role
                   </Button>
                 </div>
 
-                {/* Selected Roles List */}
+                {/* Selected Roles List for Create Modal */}
                 <div>
                   <h4 className="text-sm font-medium mb-2">Assigned Roles</h4>
                   {selectedRoles.length === 0 ? (
@@ -697,25 +1023,54 @@ const UserManagement: React.FC = () => {
                       No roles assigned yet
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
                       {selectedRoles.map((role, index) => (
                         <div
                           key={index}
-                          className="flex items-center justify-between bg-blue-50 p-3 rounded-md"
+                          className="flex items-start justify-between bg-blue-50 p-3 rounded-md border border-blue-100"
                         >
-                          <div>
-                            <div className="font-medium text-gray-900">
+                          <div className="flex-1">
+                            <div className="font-medium text-blue-900 mb-1">
                               {getRoleName(role.roleId)}
                             </div>
-                            <div className="text-sm text-gray-600">
-                              Tenant: {getTenantName(role.tenantId)} • Project:{" "}
-                              {getProjectName(role.projectId)}
+                            <div className="text-sm text-blue-700 space-y-1">
+                              {role.tenantId && (
+                                <div className="flex items-center">
+                                  <span className="font-medium text-blue-800">
+                                    Tenant:
+                                  </span>
+                                  <span className="ml-1">
+                                    {getTenantName(role.tenantId)}
+                                  </span>
+                                </div>
+                              )}
+                              {role.projectId && (
+                                <div className="flex items-center">
+                                  <span className="font-medium text-blue-800">
+                                    Project:
+                                  </span>
+                                  <span className="ml-1">
+                                    {getProjectName(role.projectId)}
+                                  </span>
+                                </div>
+                              )}
+                              {role.roleId === 1 && (
+                                <div className="text-blue-600 text-xs">
+                                  Global access across all tenants and projects
+                                </div>
+                              )}
+                              {role.roleId === 2 && (
+                                <div className="text-blue-600 text-xs">
+                                  Access to all projects within tenant
+                                </div>
+                              )}
                             </div>
                           </div>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => removeRole(index)}
+                            className="ml-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -743,7 +1098,7 @@ const UserManagement: React.FC = () => {
                     roles: [],
                   });
                   setSelectedRoles([]);
-                  setNewRole({ tenantId: "", projectId: 0, roleId: 0 });
+                  setNewRole({ tenantIds: [], projectIds: [], roleId: 0 });
                 }}
                 className="flex-1"
               >
@@ -756,8 +1111,8 @@ const UserManagement: React.FC = () => {
 
       {/* Edit User Modal */}
       {isEditDialogOpen && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 modal-backdrop">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
             <h2 className="text-xl font-bold mb-4">Edit User</h2>
             <div className="space-y-4">
               <div>
@@ -837,58 +1192,14 @@ const UserManagement: React.FC = () => {
                 </label>
               </div>
 
-              {/* Role Assignment Section */}
+              {/* Role Assignment Section for Edit Modal */}
               <div className="border-t pt-4">
                 <h3 className="text-lg font-medium mb-3">Role Assignments</h3>
 
                 {/* Add New Role */}
                 <div className="bg-gray-50 p-4 rounded-md mb-4">
                   <h4 className="text-sm font-medium mb-3">Add Role</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Tenant *
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={newRole.tenantId}
-                        onChange={(e) =>
-                          setNewRole((prev) => ({
-                            ...prev,
-                            tenantId: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Select Tenant</option>
-                        {tenantOptions.map((tenant) => (
-                          <option key={tenant.id} value={tenant.id}>
-                            {tenant.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Project *
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={newRole.projectId}
-                        onChange={(e) =>
-                          setNewRole((prev) => ({
-                            ...prev,
-                            projectId: Number(e.target.value),
-                          }))
-                        }
-                      >
-                        <option value={0}>Select Project</option>
-                        {projectOptions.map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Role *
@@ -900,6 +1211,8 @@ const UserManagement: React.FC = () => {
                           setNewRole((prev) => ({
                             ...prev,
                             roleId: Number(e.target.value),
+                            tenantIds: [],
+                            projectIds: [],
                           }))
                         }
                       >
@@ -911,19 +1224,134 @@ const UserManagement: React.FC = () => {
                         ))}
                       </select>
                     </div>
+
+                    {/* Show tenant selection for Tenant Admin (id: 2) and other roles except Product Owner (id: 1) */}
+                    {newRole.roleId !== 0 && newRole.roleId !== 1 && (
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Tenants *
+                        </label>
+                        <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+                          {tenantOptions.map((tenant) => (
+                            <label
+                              key={tenant.id}
+                              className="flex items-center space-x-2 p-1 hover:bg-gray-50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={newRole.tenantIds.includes(tenant.id)}
+                                onChange={(e) =>
+                                  handleTenantSelection(
+                                    tenant.id,
+                                    e.target.checked
+                                  )
+                                }
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm">{tenant.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {newRole.tenantIds.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-gray-600">
+                              Selected:{" "}
+                              {newRole.tenantIds
+                                .map(
+                                  (id) =>
+                                    tenantOptions.find((t) => t.id === id)?.name
+                                )
+                                .join(", ")}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Show project selection only for roles other than Product Owner (id: 1) and Tenant Admin (id: 2) */}
+                    {newRole.roleId !== 0 &&
+                      newRole.roleId !== 1 &&
+                      newRole.roleId !== 2 && (
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            Projects *
+                          </label>
+                          <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+                            {getFilteredProjects().map((project) => (
+                              <label
+                                key={project.id}
+                                className="flex items-start space-x-3 p-3 hover:bg-gray-50 cursor-pointer rounded-md border-b border-gray-100 last:border-b-0"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={newRole.projectIds.includes(
+                                    project.id
+                                  )}
+                                  onChange={(e) =>
+                                    handleProjectSelection(
+                                      project.id,
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {project.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    <span className="font-medium">Tenant:</span>{" "}
+                                    {getTenantName(project.tenantId)}
+                                  </div>
+                                </div>
+                              </label>
+                            ))}
+                            {getFilteredProjects().length === 0 && (
+                              <div className="text-sm text-gray-500 italic p-3 text-center">
+                                No projects available for selected tenants
+                              </div>
+                            )}
+                          </div>
+                          {newRole.projectIds.length > 0 && (
+                            <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                              <p className="text-xs text-blue-800 font-medium mb-1">
+                                Selected Projects:
+                              </p>
+                              <div className="text-xs text-blue-700">
+                                {newRole.projectIds
+                                  .map((id) => {
+                                    const project = projectOptions.find(
+                                      (p) => p.id === id
+                                    );
+                                    return project
+                                      ? `${project.name} (${getTenantName(project.tenantId)})`
+                                      : `Project ${id}`;
+                                  })
+                                  .join(", ")}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                   </div>
+
                   <Button
                     onClick={addRole}
                     className="mt-3"
                     disabled={
-                      !newRole.tenantId || !newRole.projectId || !newRole.roleId
+                      !newRole.roleId ||
+                      (newRole.roleId !== 1 &&
+                        newRole.tenantIds.length === 0) ||
+                      (newRole.roleId !== 1 &&
+                        newRole.roleId !== 2 &&
+                        newRole.projectIds.length === 0)
                     }
                   >
                     Add Role
                   </Button>
                 </div>
 
-                {/* Selected Roles List */}
+                {/* Selected Roles List for Edit Modal */}
                 <div>
                   <h4 className="text-sm font-medium mb-2">Assigned Roles</h4>
                   {selectedRoles.length === 0 ? (
@@ -931,25 +1359,54 @@ const UserManagement: React.FC = () => {
                       No roles assigned yet
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
                       {selectedRoles.map((role, index) => (
                         <div
                           key={index}
-                          className="flex items-center justify-between bg-blue-50 p-3 rounded-md"
+                          className="flex items-start justify-between bg-blue-50 p-3 rounded-md border border-blue-100"
                         >
-                          <div>
-                            <div className="font-medium text-gray-900">
+                          <div className="flex-1">
+                            <div className="font-medium text-blue-900 mb-1">
                               {getRoleName(role.roleId)}
                             </div>
-                            <div className="text-sm text-gray-600">
-                              Tenant: {getTenantName(role.tenantId)} • Project:{" "}
-                              {getProjectName(role.projectId)}
+                            <div className="text-sm text-blue-700 space-y-1">
+                              {role.tenantId && (
+                                <div className="flex items-center">
+                                  <span className="font-medium text-blue-800">
+                                    Tenant:
+                                  </span>
+                                  <span className="ml-1">
+                                    {getTenantName(role.tenantId)}
+                                  </span>
+                                </div>
+                              )}
+                              {role.projectId && (
+                                <div className="flex items-center">
+                                  <span className="font-medium text-blue-800">
+                                    Project:
+                                  </span>
+                                  <span className="ml-1">
+                                    {getProjectName(role.projectId)}
+                                  </span>
+                                </div>
+                              )}
+                              {role.roleId === 1 && (
+                                <div className="text-blue-600 text-xs">
+                                  Global access across all tenants and projects
+                                </div>
+                              )}
+                              {role.roleId === 2 && (
+                                <div className="text-blue-600 text-xs">
+                                  Access to all projects within tenant
+                                </div>
+                              )}
                             </div>
                           </div>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => removeRole(index)}
+                            className="ml-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -978,7 +1435,7 @@ const UserManagement: React.FC = () => {
                     roles: [],
                   });
                   setSelectedRoles([]);
-                  setNewRole({ tenantId: "", projectId: 0, roleId: 0 });
+                  setNewRole({ tenantIds: [], projectIds: [], roleId: 0 });
                 }}
                 className="flex-1"
               >
@@ -991,8 +1448,8 @@ const UserManagement: React.FC = () => {
 
       {/* View User Modal */}
       {isViewDialogOpen && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 modal-backdrop">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
             <h2 className="text-xl font-bold mb-4">User Details</h2>
             {loadingUserDetails ? (
               <div className="flex items-center justify-center h-32">
@@ -1064,7 +1521,7 @@ const UserManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Role Assignments */}
+                {/* Role Assignments Display */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Role Assignments
@@ -1075,14 +1532,53 @@ const UserManagement: React.FC = () => {
                         {selectedUser.roles.map((role, index) => (
                           <div
                             key={index}
-                            className="bg-white p-3 rounded border"
+                            className="bg-white p-3 rounded border border-gray-100"
                           >
-                            <div className="font-medium text-gray-900 mb-1">
+                            <div className="font-medium text-gray-900 mb-2">
                               {getRoleName(role.roleId)}
                             </div>
-                            <div className="text-sm text-gray-600">
-                              <div>Tenant: {role.tenantId}</div>
-                              <div>Project: Project {role.projectId}</div>
+                            <div className="text-sm text-gray-600 space-y-1">
+                              {/* Show tenant details if tenantId exists */}
+                              {role.tenantId && (
+                                <div className="flex items-center">
+                                  <span className="font-medium text-gray-700">
+                                    Tenant:
+                                  </span>
+                                  <span className="ml-1">
+                                    {getTenantName(role.tenantId)}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Show project details if projectId exists */}
+                              {role.projectId && (
+                                <div className="flex items-center">
+                                  <span className="font-medium text-gray-700">
+                                    Project:
+                                  </span>
+                                  <span className="ml-1">
+                                    {getProjectName(role.projectId)}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Role scope descriptions */}
+                              {role.roleId === 1 && (
+                                <div className="text-green-600 text-xs bg-green-50 p-2 rounded">
+                                  <strong>Global Access:</strong> Full access to
+                                  all tenants and projects across the system
+                                </div>
+                              )}
+                              {role.roleId === 2 && (
+                                <div className="text-blue-600 text-xs bg-blue-50 p-2 rounded">
+                                  <strong>Tenant Access:</strong> Full access to
+                                  all projects within this tenant
+                                </div>
+                              )}
+                              {role.roleId > 2 && (
+                                <div className="text-purple-600 text-xs bg-purple-50 p-2 rounded">
+                                  <strong>Project Access:</strong> Specific
+                                  access to this project within the tenant
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}

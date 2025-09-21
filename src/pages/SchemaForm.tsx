@@ -52,7 +52,11 @@ interface SchemaField {
   isCollapsed: boolean;
 }
 
-const SchemaForm: React.FC = () => {
+interface SchemaFormProps {
+  isGlobal?: boolean;
+}
+
+const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const schemaId = id ? parseInt(id) : null;
@@ -84,7 +88,9 @@ const SchemaForm: React.FC = () => {
 
     try {
       setIsLoading(true);
-      const schema = await schemaService.getSchemaById(schemaId);
+      const schema = isGlobal
+        ? await schemaService.getGlobalSchemaById(schemaId)
+        : await schemaService.getSchemaById(schemaId);
       setOriginalSchema(schema);
 
       setFormData({
@@ -315,7 +321,9 @@ const SchemaForm: React.FC = () => {
           })),
         };
 
-        await schemaService.createSchema(request);
+        await (isGlobal
+          ? schemaService.createGlobalSchema(request)
+          : schemaService.createSchema(request));
       } else {
         const request: UpdateSchemaRequest = {
           id: schemaId!,
@@ -334,14 +342,16 @@ const SchemaForm: React.FC = () => {
           })),
         };
 
-        await schemaService.updateSchema(request);
+        await (isGlobal
+          ? schemaService.updateGlobalSchema(request)
+          : schemaService.updateSchema(request));
       }
 
       setShowSuccessModal(true);
 
       // Redirect after a brief delay
       setTimeout(() => {
-        navigate("/schemas");
+        navigate(isGlobal ? "/global-schemas" : "/schemas");
       }, 2000);
     } catch (error) {
       console.error(
@@ -380,8 +390,10 @@ const SchemaForm: React.FC = () => {
           <p className="text-gray-600 mb-4">
             The schema you're looking for doesn't exist.
           </p>
-          <Link to="/schemas">
-            <Button>Back to Schema Management</Button>
+          <Link to={isGlobal ? "/global-schemas" : "/schemas"}>
+            <Button>
+              Back to {isGlobal ? "Global " : ""}Schema Management
+            </Button>
           </Link>
         </div>
       </div>
@@ -396,17 +408,17 @@ const SchemaForm: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center gap-4">
           <Link
-            to="/schemas"
+            to={isGlobal ? "/global-schemas" : "/schemas"}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Schema Management
+            Back to {isGlobal ? "Global " : ""}Schema Management
           </Link>
         </div>
         <h1 className="text-3xl font-bold tracking-tight mt-4">
           {isCreateMode
-            ? "Create New Schema"
-            : `Edit Schema: ${originalSchema?.name}`}
+            ? `Create New ${isGlobal ? "Global " : ""}Schema`
+            : `Edit ${isGlobal ? "Global " : ""}Schema: ${originalSchema?.name}`}
           {!isCreateMode && originalSchema?.version && (
             <span className="inline-flex items-center gap-1 text-lg font-normal text-gray-500 ml-3">
               <Database className="h-4 w-4" />
@@ -416,8 +428,8 @@ const SchemaForm: React.FC = () => {
         </h1>
         <p className="text-muted-foreground mt-2">
           {isCreateMode
-            ? "Define a new schema with fields and validation rules"
-            : "Modify schema details and manage fields"}
+            ? `Define a new ${isGlobal ? "global " : ""}schema with fields and validation rules`
+            : `Modify ${isGlobal ? "global " : ""}schema details and manage fields`}
         </p>
       </div>
 
@@ -844,7 +856,9 @@ const SchemaForm: React.FC = () => {
                 ) : (
                   <>
                     <Save className="h-4 w-4 mr-2" />
-                    {isCreateMode ? "Create Schema" : "Update Schema"}
+                    {isCreateMode
+                      ? `Create ${isGlobal ? "Global " : ""}Schema`
+                      : `Update ${isGlobal ? "Global " : ""}Schema`}
                   </>
                 )}
               </Button>
@@ -869,7 +883,7 @@ const SchemaForm: React.FC = () => {
             {isCreateMode ? "created" : "updated"} successfully.
           </p>
           <p className="text-sm text-gray-500">
-            Redirecting to schema management...
+            Redirecting to {isGlobal ? "global " : ""}schema management...
           </p>
         </div>
       </Modal>

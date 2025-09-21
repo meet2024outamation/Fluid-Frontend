@@ -8,6 +8,11 @@ import {
 } from "./ui/card";
 import { Button } from "./ui/button";
 import {
+  tenantSchema,
+  validateSingleField,
+  type TenantFormData,
+} from "../utils/validation";
+import {
   Plus,
   Search,
   Building,
@@ -31,36 +36,114 @@ const TenantManagement: React.FC = () => {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Validation state
+  const [validationErrors, setValidationErrors] = useState<{
+    name?: string;
+    identifier?: string;
+    databaseName?: string;
+  }>({});
 
   // Form state
   const [formData, setFormData] = useState<CreateTenantRequest>({
     identifier: "",
     name: "",
-    description: "",
+    description: null,
     databaseName: "",
-    properties: "",
+    properties: null,
   });
 
+  // Prevent body scroll when any modal is open
   useEffect(() => {
-    loadData();
-  }, []);
+    const isAnyModalOpen = isCreateDialogOpen || isEditDialogOpen;
+
+    if (isAnyModalOpen) {
+      // Prevent body scroll when modal is open
+      document.body.classList.add("modal-open");
+    } else {
+      // Restore body scroll when modal is closed
+      document.body.classList.remove("modal-open");
+    }
+
+    // Cleanup function to reset styles
+    return () => {
+      document.body.classList.remove("modal-open");
+    };
+  }, [isCreateDialogOpen, isEditDialogOpen]);
+
+  useEffect(() => {
+    // Only load data once when component mounts and prevent duplicate calls
+    if (!dataLoaded) {
+      loadData();
+    }
+  }, [dataLoaded]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [tenantsData, statsData] = await Promise.all([
-        tenantService.getTenants(),
-        tenantService.getTenantStats(),
-      ]);
+      setDataLoaded(true); // Prevent duplicate calls
+
+      // Single API call to get tenants, then calculate stats locally
+      const tenantsData = await tenantService.getTenants();
+
+      // Calculate stats from the tenants data
+      const statsData = {
+        total: tenantsData.length,
+        totalTenants: tenantsData.length,
+      };
+
       setTenants(tenantsData);
       setStats(statsData);
     } catch (error) {
       setError("Failed to load tenant data");
+      setDataLoaded(false); // Allow retry on error
       console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Validation function using Zod
+  const validateForm = () => {
+    try {
+      tenantSchema.parse(formData);
+      setValidationErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof Error && "issues" in error) {
+        const zodError = error as any;
+        const errors: {
+          name?: string;
+          identifier?: string;
+          databaseName?: string;
+        } = {};
+
+        zodError.issues.forEach((issue: any) => {
+          const field = issue.path[0];
+          if (field && !errors[field as keyof typeof errors]) {
+            errors[field as keyof typeof errors] = issue.message;
+          }
+        });
+
+        setValidationErrors(errors);
+        return false;
+      }
+      return false;
+    }
+  };
+
+  // Validate individual field on change
+  const validateFieldOnChange = (
+    fieldName: keyof TenantFormData,
+    value: any
+  ) => {
+    const error = validateSingleField(tenantSchema, fieldName, value);
+    setValidationErrors((prev) => ({
+      ...prev,
+      [fieldName]: error,
+    }));
   };
 
   const handleSearch = async () => {
@@ -83,15 +166,23 @@ const TenantManagement: React.FC = () => {
 
   const handleCreateTenant = async () => {
     try {
-      if (!formData.name || !formData.identifier) {
-        setError("Please fill in all required fields");
+      if (!validateForm()) {
+        setError("Please fix the validation errors below");
         return;
       }
 
-      await tenantService.createTenant(formData);
+      // Convert empty strings to null for optional fields
+      const submitData = {
+        ...formData,
+        description: formData.description?.trim() || null,
+        properties: formData.properties?.trim() || null,
+      };
+
+      await tenantService.createTenant(submitData);
       setIsCreateDialogOpen(false);
       resetForm();
       loadData();
+      setDataLoaded(false); // Allow fresh data reload
       setError(null);
     } catch (error: any) {
       setError(error.message || "Failed to create tenant");
@@ -100,16 +191,29 @@ const TenantManagement: React.FC = () => {
 
   const handleEditTenant = async () => {
     try {
-      if (!selectedTenant || !formData.name || !formData.identifier) {
-        setError("Please fill in all required fields");
+      if (!selectedTenant) {
+        setError("No tenant selected");
         return;
       }
 
-      await tenantService.updateTenant(selectedTenant.id, formData);
+      if (!validateForm()) {
+        setError("Please fix the validation errors below");
+        return;
+      }
+
+      // Convert empty strings to null for optional fields
+      const submitData = {
+        ...formData,
+        description: formData.description?.trim() || null,
+        properties: formData.properties?.trim() || null,
+      };
+
+      await tenantService.updateTenant(selectedTenant.id, submitData);
       setIsEditDialogOpen(false);
       setSelectedTenant(null);
       resetForm();
       loadData();
+      setDataLoaded(false); // Allow fresh data reload
       setError(null);
     } catch (error: any) {
       setError(error.message || "Failed to update tenant");
@@ -124,6 +228,7 @@ const TenantManagement: React.FC = () => {
     try {
       await tenantService.deleteTenant(tenant.id);
       loadData();
+      setDataLoaded(false); // Allow fresh data reload
       setError(null);
     } catch (error: any) {
       setError(error.message || "Failed to delete tenant");
@@ -146,10 +251,11 @@ const TenantManagement: React.FC = () => {
     setFormData({
       identifier: "",
       name: "",
-      description: "",
+      description: null,
       databaseName: "",
-      properties: "",
+      properties: null,
     });
+    setValidationErrors({});
   };
 
   const getStatusBadgeClass = (isActive: boolean) => {
@@ -305,6 +411,7 @@ const TenantManagement: React.FC = () => {
                 onClick={() => {
                   setSearchTerm("");
                   setStatusFilter("all");
+                  setDataLoaded(false); // Allow fresh data reload
                   loadData();
                 }}
               >
@@ -387,8 +494,8 @@ const TenantManagement: React.FC = () => {
 
       {/* Create Tenant Modal */}
       {isCreateDialogOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 modal-backdrop">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
             <h2 className="text-xl font-bold mb-4">Create New Tenant</h2>
             <div className="space-y-4">
               <div>
@@ -398,12 +505,23 @@ const TenantManagement: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Enter tenant name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.name
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, name: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData((prev) => ({ ...prev, name: value }));
+                    validateFieldOnChange("name", value);
+                  }}
                 />
+                {validationErrors.name && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.name}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -412,15 +530,26 @@ const TenantManagement: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Enter unique identifier (e.g., ACME_CORP)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.identifier
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.identifier}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
                     setFormData((prev) => ({
                       ...prev,
-                      identifier: e.target.value.toUpperCase(),
-                    }))
-                  }
+                      identifier: value,
+                    }));
+                    validateFieldOnChange("identifier", value);
+                  }}
                 />
+                {validationErrors.identifier && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.identifier}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -430,7 +559,7 @@ const TenantManagement: React.FC = () => {
                   placeholder="Enter tenant description"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   rows={3}
-                  value={formData.description}
+                  value={formData.description ?? ""}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
@@ -441,20 +570,31 @@ const TenantManagement: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  Database Name
+                  Database Name *
                 </label>
                 <input
                   type="text"
                   placeholder="Enter database name (optional)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.databaseName
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.databaseName}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value;
                     setFormData((prev) => ({
                       ...prev,
-                      databaseName: e.target.value,
-                    }))
-                  }
+                      databaseName: value,
+                    }));
+                    validateFieldOnChange("databaseName", value);
+                  }}
                 />
+                {validationErrors.databaseName && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.databaseName}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -464,7 +604,7 @@ const TenantManagement: React.FC = () => {
                   placeholder="Enter JSON properties (optional)"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   rows={3}
-                  value={formData.properties}
+                  value={formData.properties ?? ""}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
@@ -489,8 +629,8 @@ const TenantManagement: React.FC = () => {
 
       {/* Edit Tenant Modal */}
       {isEditDialogOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 modal-backdrop">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
             <h2 className="text-xl font-bold mb-4">Edit Tenant</h2>
             <div className="space-y-4">
               <div>
@@ -500,12 +640,23 @@ const TenantManagement: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Enter tenant name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.name
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, name: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData((prev) => ({ ...prev, name: value }));
+                    validateFieldOnChange("name", value);
+                  }}
                 />
+                {validationErrors.name && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.name}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -514,15 +665,26 @@ const TenantManagement: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Enter unique identifier"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.identifier
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.identifier}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
                     setFormData((prev) => ({
                       ...prev,
-                      identifier: e.target.value.toUpperCase(),
-                    }))
-                  }
+                      identifier: value,
+                    }));
+                    validateFieldOnChange("identifier", value);
+                  }}
                 />
+                {validationErrors.identifier && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.identifier}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -532,7 +694,7 @@ const TenantManagement: React.FC = () => {
                   placeholder="Enter tenant description"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   rows={3}
-                  value={formData.description}
+                  value={formData.description ?? ""}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
@@ -543,20 +705,31 @@ const TenantManagement: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  Database Name
+                  Database Name *
                 </label>
                 <input
                   type="text"
                   placeholder="Enter database name (optional)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.databaseName
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                   value={formData.databaseName}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value;
                     setFormData((prev) => ({
                       ...prev,
-                      databaseName: e.target.value,
-                    }))
-                  }
+                      databaseName: value,
+                    }));
+                    validateFieldOnChange("databaseName", value);
+                  }}
                 />
+                {validationErrors.databaseName && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.databaseName}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -566,7 +739,7 @@ const TenantManagement: React.FC = () => {
                   placeholder="Enter JSON properties (optional)"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   rows={3}
-                  value={formData.properties}
+                  value={formData.properties ?? ""}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,

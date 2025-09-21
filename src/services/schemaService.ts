@@ -96,6 +96,7 @@ class SchemaService {
     return response.json();
   }
 
+  // Regular Schema Methods
   async getAllSchemas(): Promise<SchemaListResponse[]> {
     const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
       method: "GET",
@@ -193,6 +194,105 @@ class SchemaService {
   ): Promise<Schema> {
     const response = await apiRequest(
       `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          IsActive: isActive,
+        }),
+      }
+    );
+
+    return this.handleResponse<Schema>(response);
+  }
+
+  // Global Schema Methods for Product Owner
+  async getAllGlobalSchemas(): Promise<SchemaListResponse[]> {
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS, {
+      method: "GET",
+    });
+    return this.handleResponse<SchemaListResponse[]>(response);
+  }
+
+  async getGlobalSchemaById(schemaId: number): Promise<Schema> {
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
+      {
+        method: "GET",
+      }
+    );
+    return this.handleResponse<Schema>(response);
+  }
+
+  async createGlobalSchema(request: CreateSchemaRequest): Promise<Schema> {
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS, {
+      method: "POST",
+      body: JSON.stringify({
+        Name: request.name,
+        Description: request.description || null,
+        SchemaFields: request.schemaFields.map((field) => ({
+          FieldName: field.fieldName,
+          FieldLabel: field.fieldLabel,
+          DataType: field.dataType,
+          Format: field.format || null,
+          IsRequired: field.isRequired,
+          DisplayOrder: field.displayOrder,
+        })),
+      }),
+    });
+
+    return this.handleResponse<Schema>(response);
+  }
+
+  async updateGlobalSchema(request: UpdateSchemaRequest): Promise<Schema> {
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${request.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          Name: request.name,
+          Description: request.description || null,
+          IsActive: request.isActive,
+          SchemaFields: request.schemaFields
+            .filter((field) => !field.isDeleted) // Only include non-deleted fields
+            .map((field) => ({
+              FieldName: field.fieldName,
+              FieldLabel: field.fieldLabel,
+              DataType: field.dataType,
+              Format: field.format || null,
+              IsRequired: field.isRequired,
+              DisplayOrder: field.displayOrder,
+            })),
+        }),
+      }
+    );
+
+    return this.handleResponse<Schema>(response);
+  }
+
+  async deleteGlobalSchema(schemaId: number): Promise<void> {
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: "Unknown error occurred" }));
+      throw new Error(
+        errorData.message || `HTTP ${response.status}: ${response.statusText}`
+      );
+    }
+  }
+
+  async toggleGlobalSchemaStatus(
+    schemaId: number,
+    isActive: boolean
+  ): Promise<Schema> {
+    const response = await apiRequest(
+      `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
       {
         method: "PATCH",
         body: JSON.stringify({

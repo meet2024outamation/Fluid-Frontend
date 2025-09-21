@@ -1,5 +1,15 @@
 import { API_CONFIG, apiRequest } from "../config/api";
 
+// Updated interface to match ProjectListResponse from backend
+export interface ProjectListResponse {
+  id: number;
+  name: string;
+  code: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// Keep ApiProject for backward compatibility, but make it identical to ProjectListResponse
 export interface ApiProject {
   id: number;
   name: string;
@@ -40,19 +50,56 @@ class ProjectService {
   }
 
   async getProjects(): Promise<ApiProject[]> {
-    const response = await apiRequest(API_CONFIG.ENDPOINTS.PROJECTS, {
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.PROJECTS_BY_TENANT, {
       method: "GET",
     });
 
     return this.handleResponse<ApiProject[]>(response);
   }
 
+  // Method for getting projects for a specific tenant
+  async getProjectsByTenant(): Promise<ApiProject[]> {
+    try {
+      const response = await apiRequest(
+        API_CONFIG.ENDPOINTS.PROJECTS_BY_TENANT,
+        {
+          method: "GET",
+        }
+      );
+      return this.handleResponse<ApiProject[]>(response);
+    } catch (error) {
+      console.error("Failed to fetch projects by tenant:", error);
+      return [];
+    }
+  }
+
   async getAllProjects(): Promise<ApiProject[]> {
     try {
-      // The API returns all projects directly, no pagination needed
-      return await this.getProjects();
+      // Check if a tenant is selected (indicating tenant-specific access)
+      const selectedTenantId = localStorage.getItem("selectedTenantId");
+
+      if (selectedTenantId) {
+        // Use tenant-specific endpoint when a tenant is selected
+        return await this.getProjectsByTenant();
+      } else {
+        // Use global endpoint for Product Owners or when no tenant is selected
+        return await this.getAllProjectsGlobal();
+      }
     } catch (error) {
       console.error("Failed to fetch projects:", error);
+      return [];
+    }
+  }
+
+  // Method for getting all projects across all tenants (for Product Owners)
+  async getAllProjectsGlobal(): Promise<ApiProject[]> {
+    try {
+      const response = await apiRequest(API_CONFIG.ENDPOINTS.PROJECTS, {
+        method: "GET",
+      });
+      return this.handleResponse<ApiProject[]>(response);
+    } catch (error) {
+      console.error("Failed to fetch global projects:", error);
       return [];
     }
   }

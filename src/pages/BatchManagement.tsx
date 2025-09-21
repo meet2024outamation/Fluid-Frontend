@@ -7,7 +7,7 @@ import {
   Users,
   Calendar,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -17,8 +17,21 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { batchService, type BatchListResponse } from "../services/batchService";
+import { useTenantSelection } from "../contexts/TenantSelectionContext";
 
 const BatchManagement: React.FC = () => {
+  const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
+    useTenantSelection();
+
+  // Redirect tenant admin users to tenant selection if they haven't selected a tenant
+  if (isTenantAdmin && needsTenantSelection) {
+    return <Navigate to="/tenant-selection" replace />;
+  }
+
+  // Redirect if project selection is needed
+  if (needsProjectSelection) {
+    return <Navigate to="/project-selection" replace />;
+  }
   const [batches, setBatches] = useState<BatchListResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

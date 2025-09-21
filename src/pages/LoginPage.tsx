@@ -12,17 +12,17 @@ import {
 } from "../components/ui/card";
 
 export const LoginPage: React.FC = () => {
-  const { user, login, isLoading } = useAuth();
+  const { user, login, isLoading, isFullyAuthenticated } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Redirect if already authenticated
-  if (user && !isLoading) {
+  // Redirect if already authenticated and fully loaded
+  if (user && isFullyAuthenticated && !isLoading) {
     // Role-based redirection
     const primaryRole = getUserPrimaryRole(user);
     switch (primaryRole) {
       case "Product Owner":
         return <Navigate to="/dashboard" replace />;
-      case "Tenant Owner":
+      case "Tenant Admin":
         return <Navigate to="/batches" replace />;
       case "Operator":
         return <Navigate to="/operator" replace />;

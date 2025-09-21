@@ -32,8 +32,32 @@ class DropdownService {
   }
 
   // Get projects for dropdown (optionally filtered by tenant)
-  async getProjectOptions(tenantId?: string): Promise<ProjectOption[]> {
+  async getProjectOptions(
+    tenantId?: string,
+    accessibleTenants?: any
+  ): Promise<ProjectOption[]> {
     try {
+      // If accessibleTenants data is provided, use that instead of API
+      if (accessibleTenants?.tenants) {
+        const projects: ProjectOption[] = [];
+
+        accessibleTenants.tenants.forEach((tenant: any) => {
+          tenant.projects.forEach((project: any) => {
+            if (project.isActive) {
+              projects.push({
+                id: project.projectId,
+                name: project.projectName,
+                tenantId: tenant.tenantId,
+              });
+            }
+          });
+        });
+
+        console.log("Projects loaded with tenant mapping:", projects);
+        return projects;
+      }
+
+      // Fallback to original API approach (but this won't have proper tenantId)
       const projects = await projectService.getAllProjects();
       return projects
         .filter((project) => project.isActive)
@@ -54,7 +78,7 @@ class DropdownService {
       // For now, return static roles. In a real app, this would come from an API
       return [
         { id: 1, name: "Product Owner" },
-        { id: 2, name: "Tenant Owner" },
+        { id: 2, name: "Tenant Admin" },
         { id: 3, name: "Operator" },
         { id: 4, name: "Member" },
       ];

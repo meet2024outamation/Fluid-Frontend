@@ -13,18 +13,18 @@ export const getUserPrimaryRole = (user: User): string => {
   // If it's a ProjectRole object, check if it has roleName first, then map roleId
   if (typeof firstRole === "object" && "roleId" in firstRole) {
     const projectRole = firstRole as ProjectRole;
-    
+
     // Use roleName from backend if available
     if (projectRole.roleName) {
       return projectRole.roleName;
     }
-    
+
     // Fallback to roleId mapping if roleName is not available
     switch (projectRole.roleId) {
       case 1:
         return "Product Owner";
       case 2:
-        return "Tenant Owner";
+        return "Tenant Admin";
       case 3:
         return "Operator";
       default:
@@ -46,7 +46,7 @@ export const navigationItems: NavigationItem[] = [
     label: "Dashboard",
     icon: "LayoutDashboard",
     path: "/dashboard",
-    roles: ["Tenant Owner"],
+    roles: ["Tenant Admin"],
   },
   {
     id: "operator-dashboard",
@@ -60,28 +60,35 @@ export const navigationItems: NavigationItem[] = [
     label: "Project Management",
     icon: "Users",
     path: "/projects",
-    roles: ["Tenant Owner"],
+    roles: ["Tenant Admin"],
   },
   {
     id: "schemas",
     label: "Schema Management",
     icon: "Database",
     path: "/schemas",
-    roles: ["Tenant Owner"],
+    roles: ["Tenant Admin"],
+  },
+  {
+    id: "global-schemas",
+    label: "Global Schema Management",
+    icon: "Database",
+    path: "/global-schemas",
+    roles: ["Product Owner"],
   },
   {
     id: "field-mapping",
     label: "Field Mapping",
     icon: "ArrowRightLeft",
     path: "/field-mapping",
-    roles: ["Tenant Owner"],
+    roles: ["Tenant Admin"],
   },
   {
     id: "batches",
     label: "Batch Management",
     icon: "Package",
     path: "/batches",
-    roles: ["Tenant Owner"],
+    roles: ["Tenant Admin"],
   },
   {
     id: "orders",

@@ -27,8 +27,8 @@ export interface UpdateUserRequest extends UserRequest {
 }
 
 export interface ProjectRole {
-  tenantId: string;
-  projectId: number;
+  tenantId: string | null;
+  projectId: number | null;
   roleId: number;
   tenantName?: string;
   projectName?: string;
@@ -52,7 +52,37 @@ export interface RoleOption {
   name: string;
 }
 
-export type UserRole = "Product Owner" | "Tenant Owner" | "Operator";
+export type UserRole = "Product Owner" | "Tenant Admin" | "Operator";
+
+// Accessible Tenants Response Types
+export interface AccessibleTenantsResponse {
+  userId: number;
+  userName: string;
+  email: string;
+  isProductOwner: boolean;
+  tenantAdminTenantIds: string[];
+  tenants: AccessibleTenant[];
+}
+
+export interface AccessibleTenant {
+  tenantId: string;
+  tenantName: string;
+  tenantIdentifier: string;
+  description?: string;
+  userRoles: string[];
+  projects: AccessibleProject[];
+  projectCount: number;
+}
+
+export interface AccessibleProject {
+  projectId: number;
+  projectName: string;
+  projectCode?: string;
+  description?: string;
+  isActive: boolean;
+  userRoles: string[];
+  createdAt: Date;
+}
 
 // Tenant Management Types
 export interface Tenant {
@@ -72,17 +102,17 @@ export interface Tenant {
 export interface CreateTenantRequest {
   identifier: string;
   name: string;
-  description?: string;
-  databaseName?: string;
-  properties?: string;
+  description?: string | null;
+  databaseName: string;
+  properties?: string | null;
 }
 
 export interface UpdateTenantRequest {
   identifier: string;
   name: string;
-  description?: string;
-  databaseName?: string;
-  properties?: string;
+  description?: string | null;
+  databaseName: string;
+  properties?: string | null;
 }
 
 // Project Management Types

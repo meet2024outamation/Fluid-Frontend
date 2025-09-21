@@ -1,4 +1,4 @@
-import type { Configuration, PopupRequest } from "@azure/msal-browser";
+import type { Configuration, RedirectRequest } from "@azure/msal-browser";
 
 // MSAL configuration
 export const msalConfig: Configuration = {
@@ -15,15 +15,22 @@ export const msalConfig: Configuration = {
   },
 };
 
-// Login request configuration with backend API scope
-export const loginRequest: PopupRequest = {
-  scopes: ["User.Read", "openid", "profile", "email"],
+// Login request configuration with redirect flow
+export const loginRequest: RedirectRequest = {
+  scopes: [
+    `api://${import.meta.env.VITE_AZURE_CLIENT_ID}/info.read`, // Only backend API scope
+    "openid",
+    "profile",
+    "email",
+  ],
   prompt: "select_account",
 };
 
-// API token request configuration
+// API token request configuration - Use same scope as login
 export const apiTokenRequest = {
-  scopes: ["User.Read"], // Add your backend API scope here if needed
+  scopes: [
+    `api://${import.meta.env.VITE_AZURE_CLIENT_ID}/info.read`, // Only backend API scope
+  ],
 };
 
 // Graph API configuration
@@ -37,5 +44,7 @@ export const userApiEndpoints = {
   getUserByEmail: "/api/users/email", // New endpoint to get user by email
   getUserById: (id: number) => `/api/users/${id}`, // Get user by ID
   createUser: "/api/users", // Create new user
+  getAccessibleTenants: "/api/users/accessible-tenants", // Get accessible tenants
+  authTest: "/api/auth/test", // Auth test endpoint
   refreshToken: "/api/auth/refresh",
 };

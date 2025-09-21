@@ -7,9 +7,12 @@ export const API_CONFIG = {
   // API endpoints
   ENDPOINTS: {
     TENANTS: "/api/tenants",
+    TENANT_DETAILS: "/api/tenants/details", // New endpoint for fetching tenant details
     USERS: "/api/users",
     PROJECTS: "/api/projects",
+    PROJECTS_BY_TENANT: "/api/projects/by-tenant", // Tenant-specific projects endpoint
     SCHEMAS: "/api/schemas",
+    GLOBAL_SCHEMAS: "/api/global-schemas",
     BATCHES: "/api/batches",
     ORDERS: "/api/orders",
     FIELD_MAPPINGS: "/api/field-mappings",
@@ -48,12 +51,19 @@ export const getAuthHeaders = (): Record<string, string> => {
     localStorage.getItem("msal.access.token") ||
     sessionStorage.getItem("msal.access.token");
 
+  const selectedTenantId = localStorage.getItem("selectedTenantId");
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  // Add tenant header if a tenant is selected
+  if (selectedTenantId) {
+    headers["X-Tenant-Id"] = selectedTenantId;
   }
 
   return headers;

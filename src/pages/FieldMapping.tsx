@@ -7,6 +7,7 @@ import {
   Users,
   CheckCircle,
 } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -18,6 +19,7 @@ import {
 import { Modal } from "../components/ui/modal";
 import { projectService, type ApiProject } from "../services/projectService";
 import { schemaService, type Schema } from "../services/schemaService";
+import { useTenantSelection } from "../contexts/TenantSelectionContext";
 import {
   fieldMappingService,
   type FieldMappingItem,
@@ -26,6 +28,19 @@ import {
 } from "../services/fieldMappingService";
 
 const FieldMappingPage: React.FC = () => {
+  const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
+    useTenantSelection();
+
+  // Redirect tenant admin users to tenant selection if they haven't selected a tenant
+  if (isTenantAdmin && needsTenantSelection) {
+    return <Navigate to="/tenant-selection" replace />;
+  }
+
+  // Redirect if project selection is needed
+  if (needsProjectSelection) {
+    return <Navigate to="/project-selection" replace />;
+  }
+
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [selectedProject, setSelectedProject] = useState<ApiProject | null>(
     null

@@ -13,7 +13,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requiredRoles,
 }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isFullyAuthenticated } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -24,7 +24,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  if (!user) {
+  if (!user || !isFullyAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

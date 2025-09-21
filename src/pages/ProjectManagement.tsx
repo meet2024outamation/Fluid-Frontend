@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Plus, RefreshCw, AlertCircle, Building2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -9,8 +9,22 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { projectService, type ApiProject } from "../services/projectService";
+import { useTenantSelection } from "../contexts/TenantSelectionContext";
 
 export default function ProjectManagement() {
+  const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
+    useTenantSelection();
+
+  // Redirect tenant admin users to tenant selection if they haven't selected a tenant
+  if (isTenantAdmin && needsTenantSelection) {
+    return <Navigate to="/tenant-selection" replace />;
+  }
+
+  // Redirect if project selection is needed
+  if (needsProjectSelection) {
+    return <Navigate to="/project-selection" replace />;
+  }
+
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,10 +38,12 @@ export default function ProjectManagement() {
       setIsLoading(true);
       setError(null);
       const data = await projectService.getAllProjects();
-      setProjects(data);
+      // Ensure data is always an array
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to load projects:", error);
       setError("Failed to load projects. Please try again.");
+      setProjects([]); // Set empty array on error
     } finally {
       setIsLoading(false);
     }
@@ -104,27 +120,51 @@ export default function ProjectManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {projects.map((project) => (
-                    <tr key={project.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <div className="font-medium">{project.name}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="text-gray-600">{project.code}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            project.isActive
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {project.isActive ? "Active" : "Inactive"}
-                        </span>
+                  {Array.isArray(projects) && projects.length > 0 ? (
+                    projects.map((project) => (
+                      <tr
+                        key={project.id}
+                        className="border-b hover:bg-gray-50"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="font-medium">{project.name}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-gray-600">{project.code}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              project.isActive
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {project.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="py-8 px-4 text-center text-gray-500"
+                      >
+                        {error ? (
+                          <div className="flex items-center justify-center space-x-2">
+                            <AlertCircle className="w-5 h-5 text-red-500" />
+                            <span>{error}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center space-x-2">
+                            <Building2 className="w-5 h-5" />
+                            <span>No projects found</span>
+                          </div>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
