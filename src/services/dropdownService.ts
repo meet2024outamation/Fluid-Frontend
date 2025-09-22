@@ -38,20 +38,32 @@ class DropdownService {
   ): Promise<ProjectOption[]> {
     try {
       // If accessibleTenants data is provided, use that instead of API
-      if (accessibleTenants?.tenants) {
+      if (accessibleTenants) {
         const projects: ProjectOption[] = [];
 
-        accessibleTenants.tenants.forEach((tenant: any) => {
-          tenant.projects.forEach((project: any) => {
-            if (project.isActive) {
-              projects.push({
-                id: project.projectId,
-                name: project.projectName,
-                tenantId: tenant.tenantId,
-              });
-            }
+        // Get projects from regular tenants
+        if (accessibleTenants.tenants) {
+          accessibleTenants.tenants.forEach((tenant: any) => {
+            tenant.projects.forEach((project: any) => {
+              if (project.isActive) {
+                projects.push({
+                  id: project.projectId,
+                  name: project.projectName,
+                  tenantId: tenant.tenantId,
+                });
+              }
+            });
           });
-        });
+        }
+
+        // Get projects from tenant admin tenants (tenantAdminIds)
+        if (accessibleTenants.tenantAdminIds) {
+          accessibleTenants.tenantAdminIds.forEach((_tenantAdmin: any) => {
+            // Tenant admin tenants might not have projects loaded yet
+            // For now, we'll skip projects from tenant admin tenants as they don't have project data
+            // Projects will be loaded when the tenant is selected
+          });
+        }
 
         console.log("Projects loaded with tenant mapping:", projects);
         return projects;

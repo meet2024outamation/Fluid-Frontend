@@ -46,7 +46,7 @@ export const navigationItems: NavigationItem[] = [
     label: "Dashboard",
     icon: "LayoutDashboard",
     path: "/dashboard",
-    roles: ["Tenant Admin"],
+    roles: ["Product Owner", "Tenant Admin"],
   },
   {
     id: "operator-dashboard",
@@ -60,14 +60,14 @@ export const navigationItems: NavigationItem[] = [
     label: "Project Management",
     icon: "Users",
     path: "/projects",
-    roles: ["Tenant Admin"],
+    roles: ["Product Owner", "Tenant Admin"],
   },
   {
     id: "schemas",
     label: "Schema Management",
     icon: "Database",
     path: "/schemas",
-    roles: ["Tenant Admin"],
+    roles: ["Product Owner", "Tenant Admin"],
   },
   {
     id: "global-schemas",
@@ -81,14 +81,14 @@ export const navigationItems: NavigationItem[] = [
     label: "Field Mapping",
     icon: "ArrowRightLeft",
     path: "/field-mapping",
-    roles: ["Tenant Admin"],
+    roles: ["Product Owner", "Tenant Admin"],
   },
   {
     id: "batches",
     label: "Batch Management",
     icon: "Package",
     path: "/batches",
-    roles: ["Tenant Admin"],
+    roles: ["Product Owner", "Tenant Admin"],
   },
   {
     id: "orders",

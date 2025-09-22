@@ -14,8 +14,10 @@ import {
   User,
   UserCog,
   Building,
+  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useTenantSelection } from "../../contexts/TenantSelectionContext";
 import {
   getNavigationForUser,
   getUserPrimaryRole,
@@ -36,6 +38,8 @@ const iconMap = {
 
 export const MainLayout: React.FC = () => {
   const { user, logout } = useAuth();
+  const { getSelectedTenant, isProductOwner, clearSelection } =
+    useTenantSelection();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -55,6 +59,15 @@ export const MainLayout: React.FC = () => {
     }
   };
 
+  const handleTenantClick = () => {
+    // Clear current selections and navigate to tenant selection
+    clearSelection();
+    navigate("/tenant-selection");
+  };
+
+  const selectedTenant = getSelectedTenant();
+  const showTenantInfo = !isProductOwner && selectedTenant;
+
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
       {/* Sidebar */}
@@ -62,7 +75,14 @@ export const MainLayout: React.FC = () => {
         className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}
       >
         <div className="flex items-center justify-between h-16 px-4 bg-blue-600">
-          <h1 className="text-xl font-semibold text-white">Fluid System</h1>
+          <div className="flex flex-col">
+            <h1 className="text-xl font-semibold text-white">Fluid System</h1>
+            {showTenantInfo && (
+              <div className="text-xs text-blue-100 truncate max-w-[200px]">
+                {selectedTenant.tenantName}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-white hover:text-gray-200"
@@ -120,6 +140,29 @@ export const MainLayout: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-4">
+              {/* Tenant Selector */}
+              {showTenantInfo && (
+                <button
+                  onClick={handleTenantClick}
+                  className="flex items-center space-x-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-all duration-200 group hover:shadow-sm"
+                  title="Click to switch tenant"
+                >
+                  <Building size={16} className="text-blue-600" />
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-blue-900">
+                      {selectedTenant.tenantName}
+                    </div>
+                    <div className="text-xs text-blue-600">
+                      Current tenant • Click to switch
+                    </div>
+                  </div>
+                  <ChevronDown
+                    size={14}
+                    className="text-blue-600 group-hover:text-blue-800 transition-colors"
+                  />
+                </button>
+              )}
+
               <div className="flex items-center space-x-2">
                 <User size={20} className="text-gray-600" />
                 <span className="text-sm text-gray-700">{`${user.firstName} ${user.lastName}`}</span>

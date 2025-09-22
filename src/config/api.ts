@@ -51,7 +51,9 @@ export const getAuthHeaders = (): Record<string, string> => {
     localStorage.getItem("msal.access.token") ||
     sessionStorage.getItem("msal.access.token");
 
-  const selectedTenantId = localStorage.getItem("selectedTenantId");
+  const selectedTenantIdentifier = localStorage.getItem(
+    "selectedTenantIdentifier"
+  );
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -61,9 +63,9 @@ export const getAuthHeaders = (): Record<string, string> => {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Add tenant header if a tenant is selected
-  if (selectedTenantId) {
-    headers["X-Tenant-Id"] = selectedTenantId;
+  // Add tenant header if a tenant identifier is selected (using identifier value but same header name)
+  if (selectedTenantIdentifier) {
+    headers["X-Tenant-Id"] = selectedTenantIdentifier;
   }
 
   return headers;

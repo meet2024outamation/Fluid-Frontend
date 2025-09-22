@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
-import { API_CONFIG, apiRequest } from "../config/api";
 import type {
   AccessibleTenantsResponse,
   AccessibleTenant,
@@ -9,7 +8,7 @@ import type {
 
 interface TenantSelectionContextType {
   accessibleTenants: AccessibleTenantsResponse | null;
-  selectedTenantId: string | null;
+  selectedTenantIdentifier: string | null;
   selectedProjectId: number | null;
   isLoading: boolean;
   isProductOwner: boolean;
@@ -17,11 +16,12 @@ interface TenantSelectionContextType {
   hasProjectAccess: boolean;
   needsTenantSelection: boolean;
   needsProjectSelection: boolean;
-  selectTenant: (tenantId: string) => void;
+  selectTenant: (tenantIdentifier: string) => void;
   selectProject: (projectId: number) => void;
   clearSelection: () => void;
   getSelectedTenant: () => AccessibleTenant | null;
   getSelectedProject: () => AccessibleProject | null;
+  getAllAccessibleTenants: () => AccessibleTenant[];
 }
 
 const TenantSelectionContext = createContext<
@@ -35,116 +35,102 @@ interface TenantSelectionProviderProps {
 export const TenantSelectionProvider: React.FC<
   TenantSelectionProviderProps
 > = ({ children }) => {
-  const { accessibleTenants, setAccessibleTenants } = useAuth();
-  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const { accessibleTenants } = useAuth();
+  const [selectedTenantIdentifier, setSelectedTenantIdentifier] = useState<
+    string | null
+  >(null);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
     null
   );
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
 
-  // Function to fetch tenant details for tenant admins
-  const fetchTenantDetails = async (tenantIds: string[]) => {
-    try {
-      setIsLoading(true);
-      const tenantDetailsPromises = tenantIds.map(async (tenantId) => {
-        try {
-          const response = await apiRequest(
-            `${API_CONFIG.ENDPOINTS.TENANTS}/${tenantId}`,
-            {
-              method: "GET",
-            }
-          );
+  // Convert tenant admin info to accessible tenant format and merge with regular tenants
+  const getAllAccessibleTenants = (): AccessibleTenant[] => {
+    if (!accessibleTenants) return [];
 
-          if (response.ok) {
-            const tenantData = await response.json();
-            return {
-              tenantId: tenantData.id,
-              tenantName: tenantData.name,
-              tenantIdentifier: tenantData.identifier,
-              description: tenantData.description,
-              userRoles: ["Tenant Admin"],
-              projects: [], // Projects will be loaded when tenant is selected
-              projectCount: 0,
-            };
-          } else {
-            // Fallback to minimal tenant object if API fails
-            return {
-              tenantId: tenantId,
-              tenantName: `Tenant ${tenantId.substring(0, 8)}...`,
-              tenantIdentifier: tenantId,
-              description: null,
-              userRoles: ["Tenant Admin"],
-              projects: [],
-              projectCount: 0,
-            };
-          }
-        } catch (error) {
-          console.error(
-            `Failed to fetch details for tenant ${tenantId}:`,
-            error
-          );
-          // Return minimal tenant object on error
-          return {
-            tenantId: tenantId,
-            tenantName: `Tenant ${tenantId.substring(0, 8)}...`,
-            tenantIdentifier: tenantId,
-            description: null,
-            userRoles: ["Tenant Admin"],
-            projects: [],
-            projectCount: 0,
-          };
-        }
-      });
+    const adminTenants: AccessibleTenant[] = (
+      accessibleTenants.tenantAdminIds || []
+    ).map((adminInfo) => ({
+      tenantId: adminInfo.tenantId,
+      tenantName: adminInfo.tenantName,
+      tenantIdentifier: adminInfo.tenantIdentifier,
+      description: adminInfo.description || undefined,
+      userRoles: ["Tenant Admin"],
+      projects: [], // Projects will be loaded when tenant is selected
+      projectCount: 0,
+    }));
 
-      const tenantDetails = await Promise.all(tenantDetailsPromises);
+    const regularTenants = accessibleTenants.tenants || [];
 
-      // Update accessible tenants with detailed information
-      if (accessibleTenants) {
-        const updatedAccessibleTenants = {
-          ...accessibleTenants,
-          tenants: tenantDetails,
-        };
-        setAccessibleTenants(updatedAccessibleTenants);
+    // Merge and deduplicate tenants by tenantId
+    const allTenants = [...adminTenants, ...regularTenants];
+    const uniqueTenants = allTenants.reduce((acc, tenant) => {
+      if (!acc.some((t) => t.tenantId === tenant.tenantId)) {
+        acc.push(tenant);
       }
-    } catch (error) {
-      console.error("Failed to fetch tenant details:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return acc;
+    }, [] as AccessibleTenant[]);
 
-  // Load tenant details for tenant admins when needed
-  useEffect(() => {
-    if (
-      accessibleTenants &&
-      accessibleTenants.tenantAdminTenantIds?.length > 0 &&
-      (!accessibleTenants.tenants || accessibleTenants.tenants.length === 0)
-    ) {
-      fetchTenantDetails(accessibleTenants.tenantAdminTenantIds);
-    }
-  }, [accessibleTenants?.tenantAdminTenantIds]);
+    return uniqueTenants;
+  };
 
   // Load from localStorage on mount
   useEffect(() => {
-    const savedTenantId = localStorage.getItem("selectedTenantId");
+    const savedTenantIdentifier = localStorage.getItem(
+      "selectedTenantIdentifier"
+    );
+    const savedTenantId = localStorage.getItem("selectedTenantId"); // fallback for existing data
     const savedProjectId = localStorage.getItem("selectedProjectId");
 
-    if (savedTenantId) {
-      setSelectedTenantId(savedTenantId);
+    const allTenants = getAllAccessibleTenants();
+    if (accessibleTenants && allTenants.length > 0) {
+      if (savedTenantIdentifier) {
+        // Prefer identifier if available
+        const tenant = allTenants.find(
+          (t) => t.tenantIdentifier === savedTenantIdentifier
+        );
+        if (tenant) {
+          setSelectedTenantIdentifier(tenant.tenantIdentifier);
+        } else {
+          // Clear invalid identifier
+          localStorage.removeItem("selectedTenantIdentifier");
+        }
+      } else if (savedTenantId) {
+        // Fallback to ID (for backward compatibility)
+        const tenant = allTenants.find((t) => t.tenantId === savedTenantId);
+        if (tenant) {
+          setSelectedTenantIdentifier(tenant.tenantIdentifier);
+          // Migrate to identifier-based storage
+          localStorage.setItem(
+            "selectedTenantIdentifier",
+            tenant.tenantIdentifier
+          );
+          // Remove old ID-based storage
+          localStorage.removeItem("selectedTenantId");
+        } else {
+          // Clear invalid ID
+          localStorage.removeItem("selectedTenantId");
+        }
+      }
     }
+
     if (savedProjectId) {
       setSelectedProjectId(parseInt(savedProjectId));
     }
-  }, []);
+  }, [accessibleTenants]);
 
   // Save to localStorage when selection changes
   useEffect(() => {
-    if (selectedTenantId) {
-      localStorage.setItem("selectedTenantId", selectedTenantId);
+    if (selectedTenantIdentifier) {
+      localStorage.setItem(
+        "selectedTenantIdentifier",
+        selectedTenantIdentifier
+      );
     } else {
-      localStorage.removeItem("selectedTenantId");
+      localStorage.removeItem("selectedTenantIdentifier");
+      localStorage.removeItem("selectedTenantId"); // Clean up old storage
     }
-  }, [selectedTenantId]);
+  }, [selectedTenantIdentifier]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -154,8 +140,9 @@ export const TenantSelectionProvider: React.FC<
     }
   }, [selectedProjectId]);
 
-  const selectTenant = (tenantId: string) => {
-    setSelectedTenantId(tenantId);
+  const selectTenant = (tenantIdentifier: string) => {
+    // Directly set the tenant identifier
+    setSelectedTenantIdentifier(tenantIdentifier);
     // Clear project selection when switching tenants
     setSelectedProjectId(null);
   };
@@ -165,14 +152,17 @@ export const TenantSelectionProvider: React.FC<
   };
 
   const clearSelection = () => {
-    setSelectedTenantId(null);
+    setSelectedTenantIdentifier(null);
     setSelectedProjectId(null);
+    localStorage.removeItem("selectedTenantIdentifier");
+    localStorage.removeItem("selectedTenantId"); // Clean up old storage
   };
 
   const getSelectedTenant = (): AccessibleTenant | null => {
-    if (!accessibleTenants || !selectedTenantId) return null;
+    if (!accessibleTenants || !selectedTenantIdentifier) return null;
+    const allTenants = getAllAccessibleTenants();
     return (
-      accessibleTenants.tenants.find((t) => t.tenantId === selectedTenantId) ||
+      allTenants.find((t) => t.tenantIdentifier === selectedTenantIdentifier) ||
       null
     );
   };
@@ -187,14 +177,13 @@ export const TenantSelectionProvider: React.FC<
 
   // Computed properties
   const isProductOwner = accessibleTenants?.isProductOwner || false;
-  const isTenantAdmin =
-    (accessibleTenants?.tenantAdminTenantIds?.length || 0) > 0;
+  const isTenantAdmin = (accessibleTenants?.tenantAdminIds?.length || 0) > 0;
   const hasProjectAccess = (accessibleTenants?.tenants?.length || 0) > 0;
 
   // Determine if user needs to make selections
   const needsTenantSelection =
     !isProductOwner &&
-    !selectedTenantId &&
+    !selectedTenantIdentifier &&
     !isLoading && // Don't show selection if still loading tenant details
     (isTenantAdmin || hasProjectAccess); // Tenant admin always needs tenant selection first
 
@@ -202,12 +191,12 @@ export const TenantSelectionProvider: React.FC<
     !isProductOwner &&
     !isTenantAdmin &&
     hasProjectAccess &&
-    !!selectedTenantId &&
+    !!selectedTenantIdentifier &&
     !selectedProjectId;
 
   const value: TenantSelectionContextType = {
     accessibleTenants,
-    selectedTenantId,
+    selectedTenantIdentifier,
     selectedProjectId,
     isLoading,
     isProductOwner,
@@ -220,6 +209,7 @@ export const TenantSelectionProvider: React.FC<
     clearSelection,
     getSelectedTenant,
     getSelectedProject,
+    getAllAccessibleTenants,
   };
 
   return (

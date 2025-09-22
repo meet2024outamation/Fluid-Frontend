@@ -116,8 +116,21 @@ function App() {
               <Route
                 path="projects/create"
                 element={
-                  <ProtectedRoute requiredRoles={["Product Owner"]}>
+                  <ProtectedRoute
+                    requiredRoles={["Product Owner", "Tenant Admin"]}
+                  >
                     <ProjectForm />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="projects/view/:id"
+                element={
+                  <ProtectedRoute
+                    requiredRoles={["Product Owner", "Tenant Admin"]}
+                  >
+                    <ProjectForm isViewMode={true} />
                   </ProtectedRoute>
                 }
               />
@@ -125,7 +138,9 @@ function App() {
               <Route
                 path="projects/edit/:id"
                 element={
-                  <ProtectedRoute requiredRoles={["Product Owner"]}>
+                  <ProtectedRoute
+                    requiredRoles={["Product Owner", "Tenant Admin"]}
+                  >
                     <ProjectForm />
                   </ProtectedRoute>
                 }
@@ -134,7 +149,9 @@ function App() {
               <Route
                 path="schemas"
                 element={
-                  <ProtectedRoute requiredRoles={["Product Owner"]}>
+                  <ProtectedRoute
+                    requiredRoles={["Product Owner", "Tenant Admin"]}
+                  >
                     <SchemaManagement />
                   </ProtectedRoute>
                 }

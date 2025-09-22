@@ -15,10 +15,24 @@ export const TenantSelectionPage: React.FC = () => {
     accessibleTenants,
     isLoading,
     isProductOwner,
-    isTenantAdmin,
     selectTenant,
     needsTenantSelection,
+    getAllAccessibleTenants,
   } = useTenantSelection();
+
+  // Check if user is switching tenants (had a previous tenant selected)
+  const wasSwitching = React.useRef(false);
+  const [previousTenant, setPreviousTenant] = React.useState<string | null>(
+    null
+  );
+
+  React.useEffect(() => {
+    const previousTenantId = localStorage.getItem("selectedTenantIdentifier");
+    if (previousTenantId) {
+      wasSwitching.current = true;
+      setPreviousTenant(previousTenantId);
+    }
+  }, []);
 
   // If user is Product Owner, redirect to dashboard
   if (isProductOwner) {
@@ -61,22 +75,27 @@ export const TenantSelectionPage: React.FC = () => {
     );
   }
 
-  const handleTenantSelect = (tenantId: string) => {
-    selectTenant(tenantId);
+  const handleTenantSelect = (tenantIdentifier: string) => {
+    selectTenant(tenantIdentifier);
     // Navigation will be handled by the router based on needsProjectSelection
   };
 
-  // Show tenant selection for Tenant Admins
-  const tenantAdminTenants = isTenantAdmin
-    ? accessibleTenants.tenants.filter((t) =>
-        accessibleTenants.tenantAdminTenantIds.includes(t.tenantId)
-      )
-    : accessibleTenants.tenants;
+  const handleBackToPrevious = () => {
+    if (previousTenant) {
+      selectTenant(previousTenant);
+      // This will restore the previous tenant and redirect appropriately
+    }
+  };
 
-  // Show loading if tenant admin has no tenant details yet
+  // Get all accessible tenants (both from tenantAdminIds and regular tenants)
+  const allTenants = getAllAccessibleTenants();
+
+  // Show loading if no tenants are available yet
   if (
-    isTenantAdmin &&
-    (!accessibleTenants.tenants || accessibleTenants.tenants.length === 0)
+    accessibleTenants &&
+    (accessibleTenants.tenantAdminIds?.length > 0 ||
+      accessibleTenants.tenants?.length > 0) &&
+    allTenants.length === 0
   ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -98,17 +117,32 @@ export const TenantSelectionPage: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Select Tenant
+            {wasSwitching.current ? "Switch Tenant" : "Select Tenant"}
           </h1>
-          <p className="text-gray-600">Choose a tenant to continue</p>
+          <p className="text-gray-600">
+            {wasSwitching.current
+              ? "Choose a different tenant to continue"
+              : "Choose a tenant to continue"}
+          </p>
+          {wasSwitching.current && previousTenant && (
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                onClick={handleBackToPrevious}
+                className="text-sm"
+              >
+                ← Back to Current Tenant
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tenantAdminTenants.map((tenant) => (
+          {allTenants.map((tenant) => (
             <Card
               key={tenant.tenantId}
               className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
-              onClick={() => handleTenantSelect(tenant.tenantId)}
+              onClick={() => handleTenantSelect(tenant.tenantIdentifier)}
             >
               <CardHeader>
                 <CardTitle className="text-lg">{tenant.tenantName}</CardTitle>
@@ -146,7 +180,7 @@ export const TenantSelectionPage: React.FC = () => {
           ))}
         </div>
 
-        {tenantAdminTenants.length === 0 && (
+        {allTenants.length === 0 && (
           <div className="text-center mt-8">
             <p className="text-gray-600">No accessible tenants found.</p>
           </div>

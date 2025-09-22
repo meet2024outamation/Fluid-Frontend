@@ -60,8 +60,16 @@ export interface AccessibleTenantsResponse {
   userName: string;
   email: string;
   isProductOwner: boolean;
-  tenantAdminTenantIds: string[];
+  tenantAdminIds: TenantAdminInfo[];
   tenants: AccessibleTenant[];
+}
+
+export interface TenantAdminInfo {
+  tenantId: string;
+  tenantName: string;
+  tenantIdentifier: string;
+  description?: string | null;
+  isActive: boolean;
 }
 
 export interface AccessibleTenant {

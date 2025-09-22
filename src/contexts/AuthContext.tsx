@@ -160,40 +160,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Store accessible tenants data
         setAccessibleTenants(accessibleTenantsData);
 
-        // If user is tenant admin but has empty tenants array, we need to create tenant objects
-        if (
-          accessibleTenantsData.tenantAdminTenantIds?.length > 0 &&
-          (!accessibleTenantsData.tenants ||
-            accessibleTenantsData.tenants.length === 0)
-        ) {
-          // Create minimal tenant objects from tenantAdminTenantIds
-          const tenantObjects = accessibleTenantsData.tenantAdminTenantIds.map(
-            (tenantId: string) => ({
-              tenantId: tenantId,
-              tenantName: `Tenant ${tenantId.substring(0, 8)}...`, // Placeholder name
-              tenantIdentifier: tenantId,
-              description: null,
-              userRoles: ["Tenant Admin"],
-              projects: [],
-              projectCount: 0,
-            })
-          );
-
-          // Update the accessibleTenantsData with the created tenant objects
-          const updatedAccessibleTenants = {
-            ...accessibleTenantsData,
-            tenants: tenantObjects,
-          };
-
-          setAccessibleTenants(updatedAccessibleTenants);
-        }
+        // The tenantAdminIds now contains full tenant objects, so no need for additional processing
 
         // Determine user roles based on accessible tenants data
         const userRoles: any[] = [];
         if (accessibleTenantsData.isProductOwner) {
           userRoles.push({ roleId: 1, roleName: "Product Owner" });
         }
-        if (accessibleTenantsData.tenantAdminTenantIds?.length > 0) {
+        if (accessibleTenantsData.tenantAdminIds?.length > 0) {
           userRoles.push({ roleId: 2, roleName: "Tenant Admin" });
         }
         if (accessibleTenantsData.tenants?.length > 0) {

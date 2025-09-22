@@ -12,6 +12,7 @@ import {
   Database,
   Calendar,
   Hash,
+  Copy,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -23,6 +24,7 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { Modal } from "../components/ui/modal";
+import { useTenantSelection } from "../contexts/TenantSelectionContext";
 import {
   schemaService,
   type Schema,
@@ -30,13 +32,16 @@ import {
 } from "../services/schemaService";
 
 const SchemaManagement: React.FC = () => {
+  const { isProductOwner } = useTenantSelection();
   const [schemas, setSchemas] = useState<SchemaListResponse[]>([]);
+  const [globalSchemas, setGlobalSchemas] = useState<SchemaListResponse[]>([]);
   const [filteredSchemas, setFilteredSchemas] = useState<SchemaListResponse[]>(
     []
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showGlobalSchemas, setShowGlobalSchemas] = useState(!isProductOwner);
 
   // Modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -49,18 +54,22 @@ const SchemaManagement: React.FC = () => {
 
   useEffect(() => {
     loadSchemas();
-  }, []);
+    if (!isProductOwner) {
+      loadGlobalSchemas();
+    }
+  }, [isProductOwner]);
 
   useEffect(() => {
     // Filter schemas based on search term
-    const filtered = schemas.filter(
+    const schemasToFilter = showGlobalSchemas ? globalSchemas : schemas;
+    const filtered = schemasToFilter.filter(
       (schema) =>
         schema.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (schema.description &&
           schema.description.toLowerCase().includes(searchTerm.toLowerCase()))
     );
     setFilteredSchemas(filtered);
-  }, [schemas, searchTerm]);
+  }, [schemas, globalSchemas, searchTerm, showGlobalSchemas]);
 
   const loadSchemas = async () => {
     try {
@@ -75,6 +84,20 @@ const SchemaManagement: React.FC = () => {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadGlobalSchemas = async () => {
+    try {
+      setError(null);
+      // For now, we'll use the same endpoint but in the future this could be a separate endpoint
+      const data = await schemaService.getAllGlobalSchemas();
+      setGlobalSchemas(data);
+    } catch (error) {
+      console.error("Failed to load global schemas:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to load global schemas"
+      );
     }
   };
 
@@ -132,6 +155,60 @@ const SchemaManagement: React.FC = () => {
     }
   };
 
+  const handleCloneGlobalSchema = async (globalSchema: SchemaListResponse) => {
+    try {
+      setIsLoading(true);
+
+      // First get the full schema details from the global schema
+      const fullGlobalSchema = await schemaService.getGlobalSchemaById(
+        globalSchema.id
+      );
+
+      // Create a new schema request based on the global schema
+      const cloneRequest = {
+        name: `${fullGlobalSchema.name} (Cloned)`,
+        description: `Cloned from global schema: ${fullGlobalSchema.description || ""}`,
+        schemaFields:
+          fullGlobalSchema.schemaFields?.map((field, index) => ({
+            fieldName: field.fieldName,
+            fieldLabel: field.fieldLabel,
+            dataType: field.dataType,
+            format: field.format,
+            isRequired: field.isRequired,
+            displayOrder: field.displayOrder || index + 1,
+          })) || [],
+      };
+
+      // Create the cloned schema as a tenant schema
+      const newSchema = await schemaService.createSchema(cloneRequest);
+
+      // Add to the schemas list and switch to "My Schemas" view
+      setSchemas((prev) => [
+        ...prev,
+        {
+          id: newSchema.id,
+          name: newSchema.name,
+          description: newSchema.description,
+          version: 1,
+          isActive: newSchema.isActive,
+          schemaFieldCount: newSchema.schemaFields?.length || 0,
+          createdAt: newSchema.createdAt,
+          createdByName: "You",
+        },
+      ]);
+
+      // Switch to My Schemas view to show the newly created schema
+      setShowGlobalSchemas(false);
+    } catch (error) {
+      console.error("Failed to clone schema:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to clone schema"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const openDeleteModal = (schema: SchemaListResponse) => {
     setSchemaToDelete(schema);
     setShowDeleteModal(true);
@@ -178,12 +255,14 @@ const SchemaManagement: React.FC = () => {
                 Create and manage data schemas and their field definitions
               </p>
             </div>
-            <Link to="/schemas/create">
-              <Button className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Create Schema
-              </Button>
-            </Link>
+            {(!isProductOwner ? !showGlobalSchemas : true) && (
+              <Link to="/schemas/create">
+                <Button className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Schema
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Stats Cards */}
@@ -259,6 +338,27 @@ const SchemaManagement: React.FC = () => {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              {/* Schema Type Toggle for Tenant Admins */}
+              {!isProductOwner && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setShowGlobalSchemas(true)}
+                    variant={showGlobalSchemas ? "default" : "outline"}
+                    size="sm"
+                  >
+                    Global Schemas
+                  </Button>
+                  <Button
+                    onClick={() => setShowGlobalSchemas(false)}
+                    variant={!showGlobalSchemas ? "default" : "outline"}
+                    size="sm"
+                  >
+                    My Schemas
+                  </Button>
+                </div>
+              )}
+
               <Button
                 onClick={loadSchemas}
                 variant="outline"
@@ -289,9 +389,15 @@ const SchemaManagement: React.FC = () => {
         {/* Schemas List */}
         <Card>
           <CardHeader>
-            <CardTitle>Schemas</CardTitle>
+            <CardTitle>
+              {!isProductOwner && showGlobalSchemas
+                ? "Global Schemas"
+                : "Schemas"}
+            </CardTitle>
             <CardDescription>
-              {filteredSchemas.length} of {schemas.length} schemas
+              {!isProductOwner && showGlobalSchemas
+                ? `${filteredSchemas.length} of ${globalSchemas.length} global schemas available to clone`
+                : `${filteredSchemas.length} of ${schemas.length} schemas`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -304,21 +410,28 @@ const SchemaManagement: React.FC = () => {
               <div className="text-center p-8 text-gray-500">
                 <Database className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  {searchTerm ? "No schemas found" : "No schemas yet"}
+                  {searchTerm
+                    ? "No schemas found"
+                    : !isProductOwner && showGlobalSchemas
+                      ? "No global schemas available"
+                      : "No schemas yet"}
                 </h3>
                 <p className="text-gray-600 mb-4">
                   {searchTerm
                     ? "Try adjusting your search criteria"
-                    : "Get started by creating your first schema"}
+                    : !isProductOwner && showGlobalSchemas
+                      ? "No global schemas are currently available to clone"
+                      : "Get started by creating your first schema"}
                 </p>
-                {!searchTerm && (
-                  <Link to="/schemas/create">
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Schema
-                    </Button>
-                  </Link>
-                )}
+                {!searchTerm &&
+                  (!isProductOwner ? !showGlobalSchemas : true) && (
+                    <Link to="/schemas/create">
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Schema
+                      </Button>
+                    </Link>
+                  )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -363,48 +476,73 @@ const SchemaManagement: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          onClick={() => openViewModal(schema)}
-                          variant="outline"
-                          size="sm"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        {showGlobalSchemas && !isProductOwner ? (
+                          // For tenant admins viewing global schemas - only show view and clone
+                          <>
+                            <Button
+                              onClick={() => openViewModal(schema)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              onClick={() => handleCloneGlobalSchema(schema)}
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-700"
+                              disabled={isLoading}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          // For product owners or tenant admins viewing their own schemas - full actions
+                          <>
+                            <Button
+                              onClick={() => openViewModal(schema)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
 
-                        <Link to={`/schemas/edit/${schema.id}`}>
-                          <Button variant="outline" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </Link>
+                            <Link to={`/schemas/edit/${schema.id}`}>
+                              <Button variant="outline" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </Link>
 
-                        <Button
-                          onClick={() => handleToggleStatus(schema)}
-                          variant="outline"
-                          size="sm"
-                          disabled={isTogglingStatus === schema.id}
-                          className={
-                            schema.isActive
-                              ? "text-yellow-600"
-                              : "text-green-600"
-                          }
-                        >
-                          {isTogglingStatus === schema.id ? (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          ) : schema.isActive ? (
-                            <ToggleLeft className="h-4 w-4" />
-                          ) : (
-                            <ToggleRight className="h-4 w-4" />
-                          )}
-                        </Button>
+                            <Button
+                              onClick={() => handleToggleStatus(schema)}
+                              variant="outline"
+                              size="sm"
+                              disabled={isTogglingStatus === schema.id}
+                              className={
+                                schema.isActive
+                                  ? "text-yellow-600"
+                                  : "text-green-600"
+                              }
+                            >
+                              {isTogglingStatus === schema.id ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : schema.isActive ? (
+                                <ToggleLeft className="h-4 w-4" />
+                              ) : (
+                                <ToggleRight className="h-4 w-4" />
+                              )}
+                            </Button>
 
-                        <Button
-                          onClick={() => openDeleteModal(schema)}
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                            <Button
+                              onClick={() => openDeleteModal(schema)}
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

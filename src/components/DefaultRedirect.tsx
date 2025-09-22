@@ -10,7 +10,7 @@ export const DefaultRedirect: React.FC = () => {
     isTenantAdmin,
     needsTenantSelection,
     needsProjectSelection,
-    selectedTenantId,
+    selectedTenantIdentifier,
     selectedProjectId,
   } = useTenantSelection();
 
@@ -20,7 +20,7 @@ export const DefaultRedirect: React.FC = () => {
     isTenantAdmin,
     needsTenantSelection,
     needsProjectSelection,
-    selectedTenantId,
+    selectedTenantIdentifier,
     selectedProjectId,
   });
 
@@ -45,7 +45,7 @@ export const DefaultRedirect: React.FC = () => {
   }
 
   // Tenant Admin with tenant selected - go to dashboard
-  if (isTenantAdmin && selectedTenantId) {
+  if (isTenantAdmin && selectedTenantIdentifier) {
     return <Navigate to="/dashboard" replace />;
   }
 

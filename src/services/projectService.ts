@@ -75,10 +75,12 @@ class ProjectService {
 
   async getAllProjects(): Promise<ApiProject[]> {
     try {
-      // Check if a tenant is selected (indicating tenant-specific access)
-      const selectedTenantId = localStorage.getItem("selectedTenantId");
+      // Check if a tenant identifier is selected (indicating tenant-specific access)
+      const selectedTenantIdentifier = localStorage.getItem(
+        "selectedTenantIdentifier"
+      );
 
-      if (selectedTenantId) {
+      if (selectedTenantIdentifier) {
         // Use tenant-specific endpoint when a tenant is selected
         return await this.getProjectsByTenant();
       } else {
@@ -89,9 +91,7 @@ class ProjectService {
       console.error("Failed to fetch projects:", error);
       return [];
     }
-  }
-
-  // Method for getting all projects across all tenants (for Product Owners)
+  } // Method for getting all projects across all tenants (for Product Owners)
   async getAllProjectsGlobal(): Promise<ApiProject[]> {
     try {
       const response = await apiRequest(API_CONFIG.ENDPOINTS.PROJECTS, {

@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
-import { Plus, RefreshCw, AlertCircle, Building2 } from "lucide-react";
+import {
+  Plus,
+  RefreshCw,
+  AlertCircle,
+  Building2,
+  Eye,
+  Edit,
+} from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
@@ -71,7 +78,7 @@ export default function ProjectManagement() {
             Manage your projects and their configurations
           </p>
         </div>
-        <Link to="/projects/new">
+        <Link to="/projects/create">
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             Add Project
@@ -102,7 +109,7 @@ export default function ProjectManagement() {
               <p className="text-gray-500 mb-4">
                 Get started by creating your first project.
               </p>
-              <Link to="/projects/new">
+              <Link to="/projects/create">
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Project
@@ -117,6 +124,7 @@ export default function ProjectManagement() {
                     <th className="text-left py-3 px-4 font-medium">Name</th>
                     <th className="text-left py-3 px-4 font-medium">Code</th>
                     <th className="text-left py-3 px-4 font-medium">Status</th>
+                    <th className="text-left py-3 px-4 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -143,12 +151,34 @@ export default function ProjectManagement() {
                             {project.isActive ? "Active" : "Inactive"}
                           </span>
                         </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-2">
+                            <Link to={`/projects/view/${project.id}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="View Project"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Link to={`/projects/edit/${project.id}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Edit Project"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan={3}
+                        colSpan={4}
                         className="py-8 px-4 text-center text-gray-500"
                       >
                         {error ? (

@@ -16,7 +16,7 @@ export const ProjectSelectionPage: React.FC = () => {
     isProductOwner,
     isTenantAdmin,
     needsProjectSelection,
-    selectedTenantId,
+    selectedTenantIdentifier,
     getSelectedTenant,
     selectProject,
     clearSelection,
@@ -28,7 +28,7 @@ export const ProjectSelectionPage: React.FC = () => {
   }
 
   // If user is Tenant Admin and has selected a tenant, go to tenant dashboard
-  if (isTenantAdmin && selectedTenantId && !needsProjectSelection) {
+  if (isTenantAdmin && selectedTenantIdentifier && !needsProjectSelection) {
     return <Navigate to="/dashboard" replace />;
   }
 

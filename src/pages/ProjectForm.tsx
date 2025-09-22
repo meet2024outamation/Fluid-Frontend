@@ -5,6 +5,7 @@ import {
   AlertCircle,
   CheckCircle,
   RefreshCw,
+  Edit,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -23,12 +24,16 @@ import {
   type UpdateProjectRequest,
 } from "../services/projectService";
 
-const ProjectForm: React.FC = () => {
+interface ProjectFormProps {
+  isViewMode?: boolean;
+}
+
+const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const projectId = id ? parseInt(id) : null;
-  const isEditMode = projectId !== null;
-  const isCreateMode = !isEditMode;
+  const isEditMode = projectId !== null && !isViewMode;
+  const isCreateMode = !projectId;
 
   const [originalProject, setOriginalProject] = useState<ApiProject | null>(
     null
@@ -39,17 +44,17 @@ const ProjectForm: React.FC = () => {
     isActive: true,
   });
 
-  const [isLoading, setIsLoading] = useState(isEditMode);
+  const [isLoading, setIsLoading] = useState(isEditMode || isViewMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    if (isEditMode && projectId && projectId > 0) {
+    if ((isEditMode || isViewMode) && projectId && projectId > 0) {
       loadProject();
     }
-  }, [projectId, isEditMode]);
+  }, [projectId, isEditMode, isViewMode]);
 
   const loadProject = async () => {
     if (!projectId) return;
@@ -204,12 +209,16 @@ const ProjectForm: React.FC = () => {
           <h1 className="text-3xl font-bold tracking-tight mt-4">
             {isCreateMode
               ? "Create New Project"
-              : `Edit Project: ${originalProject?.name}`}
+              : isViewMode
+                ? `View Project: ${originalProject?.name}`
+                : `Edit Project: ${originalProject?.name}`}
           </h1>
           <p className="text-muted-foreground mt-2">
             {isCreateMode
               ? "Add a new project to the system"
-              : "Modify project details and configuration"}
+              : isViewMode
+                ? "View project details and configuration"
+                : "Modify project details and configuration"}
           </p>
         </div>
 
@@ -233,6 +242,7 @@ const ProjectForm: React.FC = () => {
                     className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="e.g., Data Migration Project"
                     maxLength={255}
+                    disabled={isViewMode}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     The full name of the project
@@ -252,6 +262,7 @@ const ProjectForm: React.FC = () => {
                     className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                     placeholder="e.g., PROJ001"
                     maxLength={50}
+                    disabled={isViewMode}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Unique identifier for the project (letters, numbers,
@@ -269,6 +280,7 @@ const ProjectForm: React.FC = () => {
                       handleInputChange("isActive", e.target.checked)
                     }
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    disabled={isViewMode}
                   />
                   <span className="text-sm font-medium">Project is active</span>
                 </label>
@@ -312,27 +324,48 @@ const ProjectForm: React.FC = () => {
           )}
 
           {/* Submit Button */}
-          <div className="flex items-center gap-4 pt-4 border-t">
-            <Button onClick={handleSubmit} disabled={isSubmitting} size="lg">
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  {isCreateMode ? "Creating Project..." : "Updating Project..."}
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  {isCreateMode ? "Create Project" : "Update Project"}
-                </>
-              )}
-            </Button>
-
-            <Link to="/projects">
-              <Button variant="outline" size="lg" disabled={isSubmitting}>
-                Cancel
+          {!isViewMode && (
+            <div className="flex items-center gap-4 pt-4 border-t">
+              <Button onClick={handleSubmit} disabled={isSubmitting} size="lg">
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    {isCreateMode
+                      ? "Creating Project..."
+                      : "Updating Project..."}
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    {isCreateMode ? "Create Project" : "Update Project"}
+                  </>
+                )}
               </Button>
-            </Link>
-          </div>
+
+              <Link to="/projects">
+                <Button variant="outline" size="lg" disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          {/* Back Button for View Mode */}
+          {isViewMode && (
+            <div className="flex items-center gap-4 pt-4 border-t">
+              <Link to="/projects">
+                <Button variant="outline" size="lg">
+                  Back to Projects
+                </Button>
+              </Link>
+              <Link to={`/projects/edit/${projectId}`}>
+                <Button size="lg">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Project
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Success Modal */}
