@@ -15,6 +15,7 @@ import {
   UserCog,
   Building,
   ChevronDown,
+  GitBranch,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTenantSelection } from "../../contexts/TenantSelectionContext";
@@ -34,6 +35,7 @@ const iconMap = {
   Settings,
   UserCog,
   Building,
+  GitBranch,
 };
 
 export const MainLayout: React.FC = () => {

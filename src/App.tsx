@@ -25,6 +25,7 @@ import OperatorDashboard from "./pages/OperatorDashboard";
 import UserManagement from "./components/UserManagement";
 import TenantManagement from "./components/TenantManagement";
 import GlobalSchemaManagement from "./components/GlobalSchemaManagement";
+import TenantOrderFlowManagement from "./pages/TenantOrderFlowManagement";
 import "./App.css";
 
 function App() {
@@ -193,6 +194,15 @@ function App() {
                     requiredRoles={["Product Owner", "Tenant Admin"]}
                   >
                     <CreateFieldMapping />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="order-flow"
+                element={
+                  <ProtectedRoute requiredRoles={["Tenant Admin"]}>
+                    <TenantOrderFlowManagement />
                   </ProtectedRoute>
                 }
               />

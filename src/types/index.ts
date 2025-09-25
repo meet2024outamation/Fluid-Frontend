@@ -262,12 +262,21 @@ export interface Order {
 }
 
 export type OrderStatus =
+  // Original statuses (for backward compatibility)
   | "Pending"
   | "Assigned"
   | "In Progress"
   | "Completed"
   | "Flagged"
-  | "On Hold";
+  | "On Hold"
+  // New workflow statuses
+  | "Created"
+  | "ValidationError"
+  | "ReadyForAI"
+  | "AIProcessing"
+  | "ReadyForAssignment"
+  | "QCRequired"
+  | "Error";
 export type OrderPriority = "Low" | "Normal" | "High" | "Urgent";
 
 export interface Document {
@@ -346,4 +355,41 @@ export interface FilterOptions {
 export interface SortOptions {
   field: string;
   direction: "asc" | "desc";
+}
+
+// Order Flow Management Types
+export interface OrderFlowStep {
+  id: string;
+  status: OrderStatus;
+  rank: number;
+  isActive: boolean;
+  label: string;
+  description?: string;
+}
+
+export interface TenantOrderFlow {
+  id: string;
+  tenantId: string;
+  steps: OrderFlowStep[];
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  createdBy: string;
+  updatedBy?: string;
+}
+
+export interface CreateTenantOrderFlowRequest {
+  tenantId: string;
+  steps: Omit<OrderFlowStep, "id">[];
+}
+
+export interface UpdateTenantOrderFlowRequest {
+  id: string;
+  steps: OrderFlowStep[];
+}
+
+export interface OrderFlowPreview {
+  activeSteps: OrderFlowStep[];
+  totalSteps: number;
+  estimatedDuration?: number;
 }

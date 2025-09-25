@@ -84,6 +84,13 @@ export const navigationItems: NavigationItem[] = [
     roles: ["Product Owner", "Tenant Admin"],
   },
   {
+    id: "order-flow",
+    label: "Order Flow Management",
+    icon: "GitBranch",
+    path: "/order-flow",
+    roles: ["Tenant Admin"],
+  },
+  {
     id: "batches",
     label: "Batch Management",
     icon: "Package",
@@ -102,6 +109,13 @@ export const navigationItems: NavigationItem[] = [
     label: "User Management",
     icon: "UserCog",
     path: "/users",
+    roles: ["Product Owner"],
+  },
+  {
+    id: "order-status-management",
+    label: "Order Status Management",
+    icon: "ListChecks",
+    path: "/order-status-management",
     roles: ["Product Owner"],
   },
   {
