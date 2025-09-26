@@ -1,11 +1,5 @@
 import { apiRequest } from "../config/api";
-import type {
-  TenantOrderFlow,
-  CreateTenantOrderFlowRequest,
-  UpdateTenantOrderFlowRequest,
-  OrderFlowStep,
-  OrderStatus,
-} from "../types";
+import type { TenantOrderFlow, OrderFlowStep, OrderStatus } from "../types";
 
 class OrderFlowService {
   // Get tenant order flow configuration
@@ -16,23 +10,15 @@ class OrderFlowService {
     return response.json();
   }
 
-  // Create new tenant order flow
-  async createTenantOrderFlow(
-    request: CreateTenantOrderFlowRequest
-  ): Promise<TenantOrderFlow> {
-    const response = await apiRequest(`/api/tenantorderflow`, {
+  // Create new order flow (new API)
+  async createOrderFlow(request: {
+    orderId: number;
+    orderStatusId: number;
+    rank: number;
+    isActive: boolean;
+  }): Promise<any> {
+    const response = await apiRequest(`/api/order-flows`, {
       method: "POST",
-      body: JSON.stringify(request),
-    });
-    return response.json();
-  }
-
-  // Update existing tenant order flow
-  async updateTenantOrderFlow(
-    request: UpdateTenantOrderFlowRequest
-  ): Promise<TenantOrderFlow> {
-    const response = await apiRequest(`/api/tenantorderflow/${request.id}`, {
-      method: "PUT",
       body: JSON.stringify(request),
     });
     return response.json();

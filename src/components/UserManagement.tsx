@@ -889,7 +889,7 @@ const UserManagement: React.FC = () => {
                       </select>
                     </div>
 
-                    {/* Show tenant selection for Tenant Admin (id: 2) and other roles except Product Owner (id: 1) */}
+                    {/* Show tenant selection for Tenant Admin (id: 2) and other roles except Product Owner (id: 1) (see config/roles.ts) */}
                     {newRole.roleId !== 0 && newRole.roleId !== 1 && (
                       <div>
                         <label className="block text-sm font-medium mb-1">
@@ -932,7 +932,7 @@ const UserManagement: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Show project selection only for roles other than Product Owner (id: 1) and Tenant Admin (id: 2) */}
+                    {/* Show project selection only for roles other than Product Owner (id: 1) and Tenant Admin (id: 2) (see config/roles.ts) */}
                     {newRole.roleId !== 0 &&
                       newRole.roleId !== 1 &&
                       newRole.roleId !== 2 && (

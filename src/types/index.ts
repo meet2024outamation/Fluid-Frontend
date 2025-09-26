@@ -52,6 +52,7 @@ export interface RoleOption {
   name: string;
 }
 
+// Use role constants from config/roles.ts for all role string values throughout the project
 export type UserRole = "Product Owner" | "Tenant Admin" | "Operator";
 
 // Accessible Tenants Response Types
@@ -164,14 +165,7 @@ export interface SchemaField {
   description?: string;
 }
 
-export type FieldDataType =
-  | "text"
-  | "number"
-  | "date"
-  | "boolean"
-  | "email"
-  | "phone"
-  | "currency";
+export type FieldDataType = "string" | "number" | "dateTime" | "date" | "bool";
 
 // Field Mapping Types
 export interface FieldMapping {

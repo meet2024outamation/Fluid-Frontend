@@ -69,16 +69,9 @@ export interface UpdateSchemaFieldRequest {
 export const DATA_TYPES = [
   "string",
   "number",
-  "boolean",
+  "dateTime",
   "date",
-  "datetime",
-  "decimal",
-  "email",
-  "url",
-  "phone",
-  "currency",
-  "text",
-  "longtext",
+  "bool",
 ] as const;
 
 export type DataType = (typeof DATA_TYPES)[number];
@@ -408,16 +401,9 @@ class SchemaService {
     const displayNames: Record<string, string> = {
       string: "String",
       number: "Number",
-      boolean: "Boolean",
+      dateTime: "Date & Time",
       date: "Date",
-      datetime: "Date & Time",
-      decimal: "Decimal",
-      email: "Email",
-      url: "URL",
-      phone: "Phone",
-      currency: "Currency",
-      text: "Text",
-      longtext: "Long Text",
+      bool: "Boolean",
     };
     return displayNames[dataType] || dataType;
   }

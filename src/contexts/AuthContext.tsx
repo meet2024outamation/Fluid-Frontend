@@ -12,6 +12,11 @@ import {
 } from "../config/auth";
 import { buildApiUrl } from "../config/api";
 import type { User, AccessibleTenantsResponse } from "../types";
+import {
+  PRODUCT_OWNER_ROLE,
+  TENANT_ADMIN_ROLE,
+  OPERATOR_ROLE,
+} from "../config/roles";
 
 interface AuthContextType {
   user: User | null;
@@ -165,17 +170,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Determine user roles based on accessible tenants data
         const userRoles: any[] = [];
         if (accessibleTenantsData.isProductOwner) {
-          userRoles.push({ roleId: 1, roleName: "Product Owner" });
+          /* Lines 168-169 omitted */
         }
         if (accessibleTenantsData.tenantAdminIds?.length > 0) {
-          userRoles.push({ roleId: 2, roleName: "Tenant Admin" });
+          /* Lines 171-172 omitted */
         }
         if (accessibleTenantsData.tenants?.length > 0) {
-          userRoles.push({ roleId: 3, roleName: "Operator" });
+          /* Lines 174-175 omitted */
         }
         // Default to Operator if no specific roles
         if (userRoles.length === 0) {
-          userRoles.push({ roleId: 3, roleName: "Operator" });
+          /* Lines 178-179 omitted */
+        }
+        if (accessibleTenantsData.isProductOwner) {
+          userRoles.push({ roleId: 1, roleName: PRODUCT_OWNER_ROLE });
+        }
+        if (accessibleTenantsData.tenantAdminIds?.length > 0) {
+          userRoles.push({ roleId: 2, roleName: TENANT_ADMIN_ROLE });
+        }
+        if (accessibleTenantsData.tenants?.length > 0) {
+          userRoles.push({ roleId: 3, roleName: OPERATOR_ROLE });
+        }
+        // Default to Operator if no specific roles
+        if (userRoles.length === 0) {
+          userRoles.push({ roleId: 3, roleName: OPERATOR_ROLE });
         }
 
         // Create a user object from accessible tenants response

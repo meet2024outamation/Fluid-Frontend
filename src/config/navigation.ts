@@ -1,10 +1,11 @@
 import type { NavigationItem, User, ProjectRole } from "../types";
+import { PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE, OPERATOR_ROLE } from "./roles";
 
 // Helper function to determine primary user role for navigation
 export const getUserPrimaryRole = (user: User): string => {
   if (!user.roles || user.roles.length === 0) {
     // Default fallback - you might want to determine this differently
-    return "Operator";
+    return OPERATOR_ROLE;
   }
 
   // Get the first role from the user's roles array
@@ -22,13 +23,13 @@ export const getUserPrimaryRole = (user: User): string => {
     // Fallback to roleId mapping if roleName is not available
     switch (projectRole.roleId) {
       case 1:
-        return "Product Owner";
+        return PRODUCT_OWNER_ROLE;
       case 2:
-        return "Tenant Admin";
+        return TENANT_ADMIN_ROLE;
       case 3:
-        return "Operator";
+        return OPERATOR_ROLE;
       default:
-        return "Operator";
+        return OPERATOR_ROLE;
     }
   }
 
@@ -37,7 +38,7 @@ export const getUserPrimaryRole = (user: User): string => {
     return firstRole;
   }
 
-  return "Operator"; // Default fallback
+  return OPERATOR_ROLE; // Default fallback
 };
 
 export const navigationItems: NavigationItem[] = [
@@ -46,94 +47,97 @@ export const navigationItems: NavigationItem[] = [
     label: "Dashboard",
     icon: "LayoutDashboard",
     path: "/dashboard",
-    roles: ["Product Owner", "Tenant Admin"],
+    roles: [PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE],
   },
   {
     id: "operator-dashboard",
     label: "My Dashboard",
     icon: "LayoutDashboard",
     path: "/operator",
-    roles: ["Operator"],
+    roles: [OPERATOR_ROLE],
   },
   {
     id: "projects",
     label: "Project Management",
     icon: "Users",
     path: "/projects",
-    roles: ["Product Owner", "Tenant Admin"],
+    roles: [PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE],
   },
   {
     id: "schemas",
     label: "Schema Management",
     icon: "Database",
     path: "/schemas",
-    roles: ["Product Owner", "Tenant Admin"],
+    roles: [PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE],
   },
   {
     id: "global-schemas",
     label: "Global Schema Management",
     icon: "Database",
     path: "/global-schemas",
-    roles: ["Product Owner"],
+    roles: [PRODUCT_OWNER_ROLE],
   },
   {
     id: "field-mapping",
     label: "Field Mapping",
     icon: "ArrowRightLeft",
     path: "/field-mapping",
-    roles: ["Product Owner", "Tenant Admin"],
+    roles: [PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE],
   },
   {
     id: "order-flow",
     label: "Order Flow Management",
     icon: "GitBranch",
     path: "/order-flow",
-    roles: ["Tenant Admin"],
+    roles: [TENANT_ADMIN_ROLE],
   },
   {
     id: "batches",
     label: "Batch Management",
     icon: "Package",
     path: "/batches",
-    roles: ["Product Owner", "Tenant Admin"],
+    roles: [PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE],
   },
   {
     id: "orders",
     label: "Order Processing",
     icon: "FileText",
     path: "/orders",
-    roles: ["Operator"],
+    roles: [OPERATOR_ROLE],
+  },
+  {
+    id: "pdf-viewer",
+    label: "PDF Viewer Demo",
+    icon: "FileText",
+    path: "/pdf-viewer",
+    roles: [PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE, OPERATOR_ROLE],
   },
   {
     id: "user-management",
     label: "User Management",
     icon: "UserCog",
     path: "/users",
-    roles: ["Product Owner"],
+    roles: [PRODUCT_OWNER_ROLE],
   },
   {
     id: "order-status-management",
     label: "Order Status Management",
     icon: "ListChecks",
     path: "/order-status-management",
-    roles: ["Product Owner"],
+    roles: [PRODUCT_OWNER_ROLE],
   },
   {
     id: "tenant-management",
     label: "Tenant Management",
     icon: "Building",
     path: "/tenants",
-    roles: ["Product Owner"],
+    roles: [PRODUCT_OWNER_ROLE],
   },
 ];
 
+// No more legacy Admin role; only use explicit roles
 export const getNavigationForRole = (role: string): NavigationItem[] => {
-  // Map legacy "Admin" role to "Product Owner" for backward compatibility
-  const normalizedRole = role === "Admin" ? "Product Owner" : role;
-
-  return navigationItems.filter((item) =>
-    item.roles.includes(normalizedRole as any)
-  );
+  return navigationItems.filter((item) => item.roles.includes(role as any));
 };
 
 export const getNavigationForUser = (user: User): NavigationItem[] => {

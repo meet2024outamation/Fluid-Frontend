@@ -50,9 +50,16 @@ const TenantOrderFlowManagement: React.FC<
     setSelectedTenant(tenant);
     if (tenant?.tenantId) {
       loadOrderStatuses();
-      loadOrderFlow(tenant.tenantId);
     }
+    // Don't call loadOrderFlow here!
   }, [selectedTenantIdentifier]);
+
+  // When availableStatuses is loaded, then load order flow
+  useEffect(() => {
+    if (selectedTenant?.tenantId && availableStatuses.length > 0) {
+      loadOrderFlow(selectedTenant.tenantId);
+    }
+  }, [availableStatuses, selectedTenant?.tenantId]);
 
   // Fetch available order statuses from API
   const loadOrderStatuses = async () => {
@@ -61,7 +68,16 @@ const TenantOrderFlowManagement: React.FC<
         method: "GET",
       });
       const data = await response.json();
-      setAvailableStatuses(data.statuses || []);
+      // If API returns an array of objects, map to array of names
+      if (Array.isArray(data)) {
+        setAvailableStatuses(data.map((statusObj: any) => statusObj.name));
+      } else if (Array.isArray(data.statuses)) {
+        setAvailableStatuses(
+          data.statuses.map((statusObj: any) => statusObj.name || statusObj)
+        );
+      } else {
+        setAvailableStatuses([]);
+      }
     } catch (err) {
       setAvailableStatuses([]);
     }
@@ -76,56 +92,38 @@ const TenantOrderFlowManagement: React.FC<
 
   const loadOrderFlow = async (tenantId?: string) => {
     const idToUse = tenantId || selectedTenant?.tenantId;
-    if (!idToUse || isLoading) return; // Prevent multiple simultaneous calls
+    if (!idToUse) {
+      setIsLoading(false);
+      return;
+    }
 
+    setIsLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      setError(null);
-
       // Try to get existing tenant order flow
-      // If not found, use availableStatuses to build default steps
-      try {
-        const orderFlow = await orderFlowService.getTenantOrderFlow(idToUse);
+      const orderFlow = await orderFlowService.getTenantOrderFlow(idToUse);
+      if (
+        orderFlow &&
+        Array.isArray(orderFlow.steps) &&
+        orderFlow.steps.length > 0
+      ) {
         setSteps(orderFlow.steps);
         setOriginalSteps(orderFlow.steps);
-      } catch (error) {
-        // If no existing flow, use availableStatuses to build default steps
-        const defaultSteps = (
-          availableStatuses.length > 0
-            ? availableStatuses
-            : orderFlowService.getDefaultFlowSteps().map((s) => s.status)
-        ).map((status, index) => ({
-          id: `step-${status.toLowerCase()}`,
-          status: status as any, // Cast to OrderStatus
-          rank: index + 1,
-          isActive: true,
-          label: status,
-          description: "",
-        }));
-        setSteps(defaultSteps);
-        setOriginalSteps(defaultSteps);
+      } else {
+        throw new Error("No steps found");
       }
-
-      // TODO: Uncomment when API endpoints are ready
-      /*
-      try {
-        // Try to get existing tenant order flow
-        const orderFlow = await orderFlowService.getTenantOrderFlow(idToUse);
-        setSteps(orderFlow.steps);
-        setOriginalSteps(orderFlow.steps);
-      } catch (error) {
-        console.log("No existing flow found, using default steps"); // Debug log
-        // If no existing flow, use default
-        const defaultSteps = orderFlowService.getDefaultFlowSteps();
-        setSteps(defaultSteps);
-        setOriginalSteps(defaultSteps);
-      }
-      */
     } catch (error) {
-      console.error("Failed to load order flow:", error);
-      setError(
-        error instanceof Error ? error.message : "Failed to load order flow"
-      );
+      // If no existing flow, use availableStatuses to build default steps
+      const defaultSteps = availableStatuses.map((status, index) => ({
+        id: `step-${status.toLowerCase()}`,
+        status: status as any, // Cast to OrderStatus
+        rank: index + 1,
+        isActive: true,
+        label: status,
+        description: "",
+      }));
+      setSteps(defaultSteps);
+      setOriginalSteps(defaultSteps);
     } finally {
       setIsLoading(false);
     }
@@ -165,37 +163,19 @@ const TenantOrderFlowManagement: React.FC<
         return;
       }
 
-      // TODO: Implement when API endpoints are ready
-      console.log("Save functionality - API endpoints not yet implemented");
-      console.log("Would save steps:", steps);
-
-      // Simulate successful save for now
-      setOriginalSteps([...steps]);
-      setSuccessMessage("Order flow configuration saved locally (demo mode)!");
-      setTimeout(() => setSuccessMessage(null), 3000);
-
-      /* TODO: Uncomment when API is ready
-      // Check if this is an update or create
-      const isExistingFlow = originalSteps.length > 0 && originalSteps[0].id;
-
-      if (isExistingFlow) {
-        // Update existing flow
-        await orderFlowService.updateTenantOrderFlow({
-          id: selectedTenant.tenantId, // Using tenantId as flow ID for simplicity
-          steps: steps,
-        });
-      } else {
-        // Create new flow
-        await orderFlowService.createTenantOrderFlow({
-          tenantId: selectedTenant.tenantId,
-          steps: steps.map(({ id, ...step }) => step), // Remove id for create request
+      // Call new API for each step
+      for (const step of steps) {
+        await orderFlowService.createOrderFlow({
+          orderId: Number(selectedTenant.tenantId),
+          orderStatusId:
+            typeof step.status === "number" ? step.status : step.rank, // Use status if number, else fallback
+          rank: step.rank,
+          isActive: step.isActive,
         });
       }
-
       setOriginalSteps([...steps]);
       setSuccessMessage("Order flow saved successfully!");
       setTimeout(() => setSuccessMessage(null), 3000);
-      */
     } catch (error) {
       console.error("Failed to save order flow:", error);
       setError(

@@ -2,6 +2,11 @@ import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { getUserPrimaryRole } from "../config/navigation";
+import {
+  PRODUCT_OWNER_ROLE,
+  TENANT_ADMIN_ROLE,
+  OPERATOR_ROLE,
+} from "../config/roles";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -20,11 +25,11 @@ export const LoginPage: React.FC = () => {
     // Role-based redirection
     const primaryRole = getUserPrimaryRole(user);
     switch (primaryRole) {
-      case "Product Owner":
+      case PRODUCT_OWNER_ROLE:
         return <Navigate to="/dashboard" replace />;
-      case "Tenant Admin":
+      case TENANT_ADMIN_ROLE:
         return <Navigate to="/batches" replace />;
-      case "Operator":
+      case OPERATOR_ROLE:
         return <Navigate to="/operator" replace />;
       default:
         return <Navigate to="/dashboard" replace />;

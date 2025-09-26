@@ -5,6 +5,7 @@ import type {
   AccessibleTenant,
   AccessibleProject,
 } from "../types";
+import { TENANT_ADMIN_ROLE } from "../config/roles";
 
 interface TenantSelectionContextType {
   accessibleTenants: AccessibleTenantsResponse | null;
@@ -55,7 +56,7 @@ export const TenantSelectionProvider: React.FC<
       tenantName: adminInfo.tenantName,
       tenantIdentifier: adminInfo.tenantIdentifier,
       description: adminInfo.description || undefined,
-      userRoles: ["Tenant Admin"],
+      userRoles: [TENANT_ADMIN_ROLE],
       projects: [], // Projects will be loaded when tenant is selected
       projectCount: 0,
     }));

@@ -1,4 +1,9 @@
 import type { TenantOption, ProjectOption, RoleOption } from "../types";
+import {
+  PRODUCT_OWNER_ROLE,
+  TENANT_ADMIN_ROLE,
+  OPERATOR_ROLE,
+} from "../config/roles";
 import { tenantService } from "./tenantService";
 import { projectService } from "./projectService";
 import { API_CONFIG, apiRequest } from "../config/api";
@@ -89,9 +94,9 @@ class DropdownService {
     try {
       // For now, return static roles. In a real app, this would come from an API
       return [
-        { id: 1, name: "Product Owner" },
-        { id: 2, name: "Tenant Admin" },
-        { id: 3, name: "Operator" },
+        { id: 1, name: PRODUCT_OWNER_ROLE },
+        { id: 2, name: TENANT_ADMIN_ROLE },
+        { id: 3, name: OPERATOR_ROLE },
         { id: 4, name: "Member" },
       ];
     } catch (error) {

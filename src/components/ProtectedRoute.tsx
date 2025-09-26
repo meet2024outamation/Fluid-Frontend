@@ -1,6 +1,7 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { getUserPrimaryRole } from "../config/navigation";
+import { PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE } from "../config/roles";
 import { useAuth } from "../contexts/AuthContext";
 import type { UserRole } from "../types";
 
@@ -32,10 +33,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     requiredRoles &&
     !requiredRoles.includes(getUserPrimaryRole(user) as UserRole)
   ) {
-    // Handle legacy "Admin" role as equivalent to "Product Owner"
+    // Handle legacy Admin role as equivalent to Product Owner using constants
     const userRoleString = getUserPrimaryRole(user);
     const isAdminWithProductOwnerAccess =
-      userRoleString === "Admin" && requiredRoles.includes("Product Owner");
+      userRoleString === TENANT_ADMIN_ROLE &&
+      requiredRoles.includes(PRODUCT_OWNER_ROLE);
 
     if (!isAdminWithProductOwnerAccess) {
       // Show access denied message instead of redirecting to prevent infinite loops

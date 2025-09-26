@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from "react";
-import {
-  Save,
-  ArrowLeft,
-  AlertCircle,
-  CheckCircle,
-  RefreshCw,
-  Edit,
-} from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "../components/ui/card";
 import { Modal } from "../components/ui/modal";
+import {
+  Save,
+  RefreshCw,
+  Edit,
+  AlertCircle,
+  CheckCircle,
+  ArrowLeft,
+} from "lucide-react";
 import {
   projectService,
   type ApiProject,
@@ -43,7 +43,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
     code: "",
     isActive: true,
   });
-
   const [isLoading, setIsLoading] = useState(isEditMode || isViewMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -54,23 +53,21 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
     if ((isEditMode || isViewMode) && projectId && projectId > 0) {
       loadProject();
     }
+    // eslint-disable-next-line
   }, [projectId, isEditMode, isViewMode]);
 
   const loadProject = async () => {
     if (!projectId) return;
-
     try {
       setIsLoading(true);
       const project = await projectService.getProjectById(projectId);
       setOriginalProject(project);
-
       setFormData({
         name: project.name,
         code: project.code,
         isActive: project.isActive,
       });
     } catch (error) {
-      console.error("Failed to load project:", error);
       setSubmitError(
         error instanceof Error ? error.message : "Failed to load project"
       );
@@ -92,7 +89,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
         code: formData.code.trim(),
         isActive: formData.isActive,
       };
-
       const validation = projectService.validateProject(createRequest);
       setValidationErrors(validation.errors);
       return validation.isValid;
@@ -103,7 +99,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
         code: formData.code.trim(),
         isActive: formData.isActive,
       };
-
       const validation = projectService.validateProject(updateRequest);
       setValidationErrors(validation.errors);
       return validation.isValid;
@@ -111,13 +106,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     setIsSubmitting(true);
     setSubmitError(null);
-
     try {
       if (isCreateMode) {
         const request: CreateProjectRequest = {
@@ -125,7 +116,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
           code: formData.code.trim(),
           isActive: formData.isActive,
         };
-
         await projectService.createProject(request);
       } else {
         const request: UpdateProjectRequest = {
@@ -134,21 +124,13 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
           code: formData.code.trim(),
           isActive: formData.isActive,
         };
-
         await projectService.updateProject(request);
       }
-
       setShowSuccessModal(true);
-
-      // Redirect after a brief delay
       setTimeout(() => {
         navigate("/projects");
       }, 2000);
     } catch (error) {
-      console.error(
-        `Failed to ${isCreateMode ? "create" : "update"} project:`,
-        error
-      );
       setSubmitError(
         error instanceof Error
           ? error.message
@@ -221,9 +203,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
                 : "Modify project details and configuration"}
           </p>
         </div>
-
         <div className="space-y-6">
-          {/* Project Basic Information */}
           <Card>
             <CardHeader>
               <CardTitle>Project Information</CardTitle>
@@ -248,7 +228,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
                     The full name of the project
                   </p>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Project Code <span className="text-red-500">*</span>
@@ -270,7 +249,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
                   </p>
                 </div>
               </div>
-
               <div>
                 <label className="flex items-center gap-2">
                   <input
@@ -290,8 +268,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
               </div>
             </CardContent>
           </Card>
-
-          {/* Validation Errors */}
           {validationErrors.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex items-start">
@@ -309,8 +285,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
               </div>
             </div>
           )}
-
-          {/* Submit Error */}
           {submitError && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex items-center">
@@ -322,8 +296,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
               </div>
             </div>
           )}
-
-          {/* Submit Button */}
           {!isViewMode && (
             <div className="flex items-center gap-4 pt-4 border-t">
               <Button onClick={handleSubmit} disabled={isSubmitting} size="lg">
@@ -341,7 +313,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
                   </>
                 )}
               </Button>
-
               <Link to="/projects">
                 <Button variant="outline" size="lg" disabled={isSubmitting}>
                   Cancel
@@ -349,8 +320,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
               </Link>
             </div>
           )}
-
-          {/* Back Button for View Mode */}
           {isViewMode && (
             <div className="flex items-center gap-4 pt-4 border-t">
               <Link to="/projects">
@@ -367,8 +336,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ isViewMode = false }) => {
             </div>
           )}
         </div>
-
-        {/* Success Modal */}
         <Modal
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}

@@ -216,8 +216,13 @@ const SchemaManagement: React.FC = () => {
 
   const openViewModal = async (schema: SchemaListResponse) => {
     try {
-      // Fetch the full schema details for the view modal
-      const fullSchema = await schemaService.getSchemaById(schema.id);
+      // Use global schema API if viewing global schemas, else use tenant schema API
+      let fullSchema: Schema;
+      if (showGlobalSchemas && !isProductOwner) {
+        fullSchema = await schemaService.getGlobalSchemaById(schema.id);
+      } else {
+        fullSchema = await schemaService.getSchemaById(schema.id);
+      }
       setSchemaToView(fullSchema);
       setShowViewModal(true);
     } catch (error) {

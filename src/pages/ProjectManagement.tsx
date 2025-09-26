@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Modal } from "../components/ui/modal";
+// ...existing code...
 import {
   Plus,
   RefreshCw,
@@ -6,6 +8,7 @@ import {
   Building2,
   Eye,
   Edit,
+  Link2,
 } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -16,9 +19,65 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { projectService, type ApiProject } from "../services/projectService";
+import { schemaService } from "../services/schemaService";
 import { useTenantSelection } from "../contexts/TenantSelectionContext";
 
 export default function ProjectManagement() {
+  // ...existing code...
+
+  // Schema assignment modal state (moved inside component)
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assigningProjectId, setAssigningProjectId] = useState<number | null>(
+    null
+  );
+  const [availableSchemas, setAvailableSchemas] = useState<any[]>([]);
+  const [selectedSchemaIds, setSelectedSchemaIds] = useState<number[]>([]);
+  const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
+
+  // Open modal and load schemas
+  const openAssignModal = async (projectId: number) => {
+    setAssigningProjectId(projectId);
+    setAssignModalOpen(true);
+    setIsLoadingSchemas(true);
+    try {
+      // Fetch all schemas (replace with tenant/project-specific if needed)
+      const schemas = await schemaService.getAllSchemas();
+      setAvailableSchemas(schemas);
+      // Optionally fetch already assigned schemas for this project
+      const assigned = await schemaService.getSchemasByClientId(projectId);
+      setSelectedSchemaIds(assigned.map((s: any) => s.id));
+    } catch {
+      setAvailableSchemas([]);
+      setSelectedSchemaIds([]);
+    } finally {
+      setIsLoadingSchemas(false);
+    }
+  };
+
+  const closeAssignModal = () => {
+    setAssignModalOpen(false);
+    setAssigningProjectId(null);
+    setAvailableSchemas([]);
+    setSelectedSchemaIds([]);
+  };
+
+  const handleSchemaCheckbox = (id: number) => {
+    setSelectedSchemaIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
+  };
+
+  const handleAssignSchemas = async () => {
+    if (!assigningProjectId) return;
+    // Call backend API to assign schemas
+    await projectService.assignSchemas({
+      projectId: assigningProjectId,
+      schemaIds: selectedSchemaIds,
+    });
+    closeAssignModal();
+    // Optionally reload projects or show a success message
+    loadProjects();
+  };
   const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
     useTenantSelection();
 
@@ -171,6 +230,77 @@ export default function ProjectManagement() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Assign Schemas"
+                              onClick={() => openAssignModal(project.id)}
+                            >
+                              <Link2 className="h-4 w-4" />
+                            </Button>
+                            {/* Schema Assignment Modal */}
+                            <Modal
+                              isOpen={assignModalOpen}
+                              onClose={closeAssignModal}
+                              title="Assign Schemas to Project"
+                            >
+                              <div className="p-4">
+                                {isLoadingSchemas ? (
+                                  <div className="text-gray-500">
+                                    Loading schemas...
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="mb-4">
+                                      <label className="block text-sm font-medium mb-2">
+                                        Schemas
+                                      </label>
+                                      <div className="border border-gray-300 rounded-md p-2 max-h-60 overflow-auto">
+                                        {availableSchemas.length === 0 && (
+                                          <div className="text-gray-400 text-sm">
+                                            No schemas available
+                                          </div>
+                                        )}
+                                        {availableSchemas.map((schema: any) => (
+                                          <label
+                                            key={schema.id}
+                                            className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedSchemaIds.includes(
+                                                schema.id
+                                              )}
+                                              onChange={() =>
+                                                handleSchemaCheckbox(schema.id)
+                                              }
+                                              className="mr-2"
+                                            />
+                                            {schema.name} (v{schema.version})
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        variant="outline"
+                                        onClick={closeAssignModal}
+                                      >
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        onClick={handleAssignSchemas}
+                                        disabled={
+                                          selectedSchemaIds.length === 0
+                                        }
+                                      >
+                                        Assign
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </Modal>
                           </div>
                         </td>
                       </tr>
