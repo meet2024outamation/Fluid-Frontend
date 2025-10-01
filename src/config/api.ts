@@ -1,3 +1,4 @@
+import { keysToCamelCase } from "../utils/camelCaseKeys";
 // API Configuration
 export const API_CONFIG = {
   // Use environment variable or fall back to relative URLs for development
@@ -77,10 +78,29 @@ export const apiRequest = async (
   options: RequestInit = {}
 ): Promise<Response> => {
   const url = buildApiUrl(endpoint);
+
   const authHeaders = getAuthHeaders();
+
+  let body = options.body;
+  // Only transform for POST, PUT, PATCH with JSON body
+  if (
+    body &&
+    typeof body === "string" &&
+    (options.method === "POST" ||
+      options.method === "PUT" ||
+      options.method === "PATCH")
+  ) {
+    try {
+      const parsed = JSON.parse(body);
+      body = JSON.stringify(keysToCamelCase(parsed));
+    } catch (e) {
+      // If not JSON, leave as is
+    }
+  }
 
   const config: RequestInit = {
     ...options,
+    body,
     headers: {
       ...authHeaders,
       ...options.headers,

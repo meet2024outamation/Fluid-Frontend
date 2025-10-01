@@ -32,6 +32,52 @@ import {
 } from "../services/schemaService";
 
 const SchemaManagement: React.FC = () => {
+  // Handler functions for schema fields (must be defined here to be available in JSX)
+  const handleAddFieldAfter = (fieldId: number) => {
+    setSchemaToView((prev) => {
+      if (!prev) return prev;
+      const idx = prev.schemaFields.findIndex((f: any) => f.id === fieldId);
+      if (idx === -1) return prev;
+      const newField = {
+        id: Date.now(),
+        fieldName: "",
+        fieldLabel: "",
+        dataType: "string",
+        format: "",
+        isRequired: false,
+        displayOrder: idx + 2,
+        MinLength: undefined,
+        MaxLength: undefined,
+        Precision: undefined,
+      };
+      const newFields = [
+        ...prev.schemaFields.slice(0, idx + 1),
+        newField,
+        ...prev.schemaFields.slice(idx + 1),
+      ].map((f: any, i: number) => ({ ...f, displayOrder: i + 1 }));
+      return { ...prev, schemaFields: newFields };
+    });
+  };
+
+  const handleDeleteField = (fieldId: number) => {
+    setSchemaToView((prev) => {
+      if (!prev) return prev;
+      const newFields = prev.schemaFields
+        .filter((f: any) => f.id !== fieldId)
+        .map((f: any, i: number) => ({ ...f, displayOrder: i + 1 }));
+      return { ...prev, schemaFields: newFields };
+    });
+  };
+
+  const handleFieldChange = (fieldId: number, key: string, value: any) => {
+    setSchemaToView((prev) => {
+      if (!prev) return prev;
+      const newFields = prev.schemaFields.map((f: any) =>
+        f.id === fieldId ? { ...f, [key]: value } : f
+      );
+      return { ...prev, schemaFields: newFields };
+    });
+  };
   const { isProductOwner } = useTenantSelection();
   const [schemas, setSchemas] = useState<SchemaListResponse[]>([]);
   const [globalSchemas, setGlobalSchemas] = useState<SchemaListResponse[]>([]);
@@ -675,6 +721,17 @@ const SchemaManagement: React.FC = () => {
                                   <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full">
                                     {field.displayOrder}
                                   </span>
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="ml-2"
+                                    title="Add Field After"
+                                    onClick={() =>
+                                      handleAddFieldAfter(field.id)
+                                    }
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
                                   <div>
                                     <h5 className="font-semibold text-gray-900 text-lg">
                                       {field.fieldLabel}
@@ -693,18 +750,97 @@ const SchemaManagement: React.FC = () => {
                                       </span>
                                     </div>
                                   </div>
+                                  <Button
+                                    size="icon"
+                                    variant="destructive"
+                                    className="ml-2"
+                                    title="Delete Field"
+                                    onClick={() => handleDeleteField(field.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-
-                                {field.format && (
-                                  <div className="flex items-center gap-2 ml-11">
-                                    <span className="text-gray-500 text-sm font-medium">
-                                      Format:
-                                    </span>
-                                    <span className="text-gray-700 text-sm">
-                                      {field.format}
-                                    </span>
+                                // Handler functions for schema fields
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-11">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">
+                                      Format (Optional)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                                      value={field.format || ""}
+                                      onChange={(e) =>
+                                        handleFieldChange(
+                                          field.id,
+                                          "format",
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder="e.g., dd/MM/yyyy, ###-##-####"
+                                    />
                                   </div>
-                                )}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">
+                                      Min Length
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                                      value={field.MinLength ?? ""}
+                                      onChange={(e) =>
+                                        handleFieldChange(
+                                          field.id,
+                                          "MinLength",
+                                          e.target.value
+                                            ? parseInt(e.target.value)
+                                            : undefined
+                                        )
+                                      }
+                                      placeholder="Min Length"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">
+                                      Max Length
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                                      value={field.MaxLength ?? ""}
+                                      onChange={(e) =>
+                                        handleFieldChange(
+                                          field.id,
+                                          "MaxLength",
+                                          e.target.value
+                                            ? parseInt(e.target.value)
+                                            : undefined
+                                        )
+                                      }
+                                      placeholder="Max Length"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">
+                                      Precision
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                                      value={field.Precision ?? ""}
+                                      onChange={(e) =>
+                                        handleFieldChange(
+                                          field.id,
+                                          "Precision",
+                                          e.target.value
+                                            ? parseInt(e.target.value)
+                                            : undefined
+                                        )
+                                      }
+                                      placeholder="Precision"
+                                    />
+                                  </div>
+                                </div>
                               </div>
 
                               <div className="flex flex-col items-end gap-2 ml-6">

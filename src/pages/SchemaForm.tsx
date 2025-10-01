@@ -50,6 +50,9 @@ interface SchemaField {
   isDeleted: boolean;
   isNew: boolean;
   isCollapsed: boolean;
+  minLength?: number;
+  maxLength?: number;
+  precision?: number;
 }
 
 interface SchemaFormProps {
@@ -130,11 +133,16 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
     }
   };
 
+  // Add a new field at the end
   const addSchemaField = () => {
-    const maxOrder = Math.max(
-      ...schemaFields.filter((f) => !f.isDeleted).map((f) => f.displayOrder),
-      0
-    );
+    insertSchemaField(schemaFields.filter((f) => !f.isDeleted).length - 1);
+  };
+
+  // Insert a new field after a given index (active fields only)
+  const insertSchemaField = (afterIndex: number) => {
+    const activeFields = schemaFields.filter((f) => !f.isDeleted);
+    const insertAt = afterIndex + 1;
+    const maxOrder = Math.max(0, ...activeFields.map((f) => f.displayOrder));
     const newField: SchemaField = {
       tempId: `new_${Date.now()}_${Math.random()}`,
       fieldName: "",
@@ -145,9 +153,24 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
       displayOrder: maxOrder + 1,
       isDeleted: false,
       isNew: true,
-      isCollapsed: false, // Start expanded
+      isCollapsed: false,
     };
-    setSchemaFields([...schemaFields, newField]);
+    // Insert new field into the correct position in the full schemaFields array
+    let newFields: SchemaField[] = [];
+    let activeIdx = 0;
+    for (let i = 0; i < schemaFields.length; i++) {
+      newFields.push(schemaFields[i]);
+      if (!schemaFields[i].isDeleted && activeIdx === afterIndex) {
+        newFields.push(newField);
+      }
+      if (!schemaFields[i].isDeleted) activeIdx++;
+    }
+    // If inserting at the end
+    if (insertAt >= activeFields.length) {
+      newFields.push(newField);
+    }
+    setSchemaFields(newFields);
+    setTimeout(reorderFields, 0);
   };
 
   const removeSchemaField = (tempId: string) => {
@@ -497,10 +520,6 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Schema Fields ({activeFields.length})</span>
-              <Button onClick={addSchemaField} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Field
-              </Button>
             </CardTitle>
             <CardDescription>
               {isCreateMode
@@ -581,6 +600,16 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
                         </div>
 
                         <div className="flex items-center gap-1">
+                          {/* Add Field Button */}
+                          <Button
+                            onClick={() => insertSchemaField(index)}
+                            variant="outline"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 h-7 w-7 p-0"
+                            title="Add field after this"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
                           {/* Collapse Toggle Button */}
                           <Button
                             onClick={() => toggleFieldCollapse(field.tempId)}
@@ -595,13 +624,13 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
                               <ChevronUp className="h-3 w-3" />
                             )}
                           </Button>
-
                           {/* Remove Button */}
                           <Button
                             onClick={() => removeSchemaField(field.tempId)}
                             variant="outline"
                             size="sm"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 h-7 w-7 p-0"
+                            title="Delete field"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -716,8 +745,90 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
                               </p>
                             </div>
 
+                            {/* MinLength, MaxLength, Precision Inputs */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              {/* MinLength */}
+                              <div className="flex flex-col">
+                                <label className="flex text-sm font-medium text-gray-700 mb-1 items-center gap-1">
+                                  MinLength
+                                  <span
+                                    className="text-gray-400 cursor-help"
+                                    title="Minimum number of characters allowed for this field."
+                                  >
+                                    ?
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={field.minLength ?? ""}
+                                  onChange={(e) =>
+                                    updateSchemaField(field.tempId, {
+                                      minLength: e.target.value
+                                        ? parseInt(e.target.value)
+                                        : undefined,
+                                    })
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                                  placeholder="Min"
+                                />
+                              </div>
+                              {/* MaxLength */}
+                              <div className="flex flex-col">
+                                <label className="flex text-sm font-medium text-gray-700 mb-1 items-center gap-1">
+                                  MaxLength
+                                  <span
+                                    className="text-gray-400 cursor-help"
+                                    title="Maximum number of characters allowed for this field."
+                                  >
+                                    ?
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={field.maxLength ?? ""}
+                                  onChange={(e) =>
+                                    updateSchemaField(field.tempId, {
+                                      maxLength: e.target.value
+                                        ? parseInt(e.target.value)
+                                        : undefined,
+                                    })
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                                  placeholder="Max"
+                                />
+                              </div>
+                              {/* Precision */}
+                              <div className="flex flex-col">
+                                <label className="flex text-sm font-medium text-gray-700 mb-1 items-center gap-1">
+                                  Precision
+                                  <span
+                                    className="text-gray-400 cursor-help"
+                                    title="Number of decimal places allowed for numeric fields."
+                                  >
+                                    ?
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={field.precision ?? ""}
+                                  onChange={(e) =>
+                                    updateSchemaField(field.tempId, {
+                                      precision: e.target.value
+                                        ? parseInt(e.target.value)
+                                        : undefined,
+                                    })
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                                  placeholder="Precision"
+                                />
+                              </div>
+                            </div>
+
                             {/* Settings */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 mt-4">
                               <h4 className="text-sm font-medium text-gray-700 border-b border-gray-200 pb-2">
                                 Field Settings
                               </h4>

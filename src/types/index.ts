@@ -157,12 +157,16 @@ export type SchemaType =
   | "Other";
 
 export interface SchemaField {
-  id: string;
-  key: string;
-  dataType: FieldDataType;
+  id: number;
+  fieldName: string;
+  fieldLabel: string;
+  dataType: string;
   format?: string;
-  required: boolean;
-  description?: string;
+  isRequired: boolean;
+  displayOrder: number;
+  MinLength?: number;
+  MaxLength?: number;
+  Precision?: number;
 }
 
 export type FieldDataType = "string" | "number" | "dateTime" | "date" | "bool";

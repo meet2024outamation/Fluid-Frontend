@@ -94,6 +94,9 @@ class BatchService {
     if (authHeaders["Authorization"]) {
       headers["Authorization"] = authHeaders["Authorization"] as string;
     }
+    if (authHeaders["X-Tenant-Id"]) {
+      headers["X-Tenant-Id"] = authHeaders["X-Tenant-Id"] as string;
+    }
 
     const response = await fetch(url, {
       method: "POST",

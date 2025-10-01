@@ -8,6 +8,9 @@ export interface SchemaField {
   format?: string;
   isRequired: boolean;
   displayOrder: number;
+  MinLength?: number;
+  MaxLength?: number;
+  Precision?: number;
 }
 
 export interface Schema {
@@ -45,6 +48,9 @@ export interface CreateSchemaFieldRequest {
   format?: string;
   isRequired: boolean;
   displayOrder: number;
+  MinLength?: number;
+  MaxLength?: number;
+  Precision?: number;
 }
 
 export interface UpdateSchemaRequest {
@@ -64,6 +70,9 @@ export interface UpdateSchemaFieldRequest {
   isRequired: boolean;
   displayOrder: number;
   isDeleted?: boolean; // For marking fields as deleted
+  MinLength?: number;
+  MaxLength?: number;
+  Precision?: number;
 }
 
 export const DATA_TYPES = [

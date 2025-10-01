@@ -37,8 +37,8 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
-// Initialize MSAL instance
-const msalInstance = new PublicClientApplication(msalConfig);
+// Initialize MSAL instance (singleton)
+export const msalInstance = new PublicClientApplication(msalConfig);
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -51,43 +51,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initializeAuth = async () => {
       try {
         await msalInstance.initialize();
-
-        // Handle redirect response first (when returning from Microsoft login)
-        const redirectResponse = await msalInstance.handleRedirectPromise();
-
-        if (redirectResponse && redirectResponse.account) {
-          // User just completed login via redirect, use the token from redirect response
-          if (redirectResponse.accessToken) {
-            // We already have the token from redirect, use it directly
-            await loadUserFromBackendWithToken(
-              redirectResponse.account,
-              redirectResponse.accessToken
-            );
-          } else {
-            // Fallback: load user data normally if no token in redirect response
-            await loadUserFromBackend(redirectResponse.account);
+        const response = await msalInstance.handleRedirectPromise();
+        if (response) {
+          msalInstance.setActiveAccount(response.account);
+        } else {
+          const currentAccounts = msalInstance.getAllAccounts();
+          if (currentAccounts.length > 0) {
+            msalInstance.setActiveAccount(currentAccounts[0]);
           }
-          return;
         }
-
-        // Check if user is already logged in from previous session
-        const accounts = msalInstance.getAllAccounts();
-        if (accounts.length > 0) {
-          // Just set the user as authenticated without making token requests
-          const account = accounts[0];
-          // Create a minimal user object from account info without API calls
-          const minimalUser: User = {
-            id: 0, // Temporary ID until we load from backend
-            email: account.username,
-            firstName: account.name?.split(" ")[0] || "",
-            lastName: account.name?.split(" ").slice(1).join(" ") || "",
-            phone: "",
-            isActive: true,
-            roles: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          setUser(minimalUser);
+        const activeAccount = msalInstance.getActiveAccount();
+        if (activeAccount) {
+          // Try to get token silently and load user
+          try {
+            const tokenResponse = await msalInstance.acquireTokenSilent({
+              ...apiTokenRequest,
+              account: activeAccount,
+            });
+            await loadUserFromBackendWithToken(
+              activeAccount,
+              tokenResponse.accessToken
+            );
+          } catch (tokenError) {
+            // fallback: just set minimal user
+            const minimalUser: User = {
+              id: 0,
+              email: activeAccount.username,
+              firstName: activeAccount.name?.split(" ")[0] || "",
+              lastName: activeAccount.name?.split(" ").slice(1).join(" ") || "",
+              phone: "",
+              isActive: true,
+              roles: [],
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            setUser(minimalUser);
+          }
         }
       } catch (error) {
         console.error("Authentication initialization failed:", error);
@@ -95,7 +94,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(false);
       }
     };
-
     initializeAuth();
   }, []);
 

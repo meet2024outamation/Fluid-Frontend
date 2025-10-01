@@ -25,7 +25,12 @@ import {
 import { orderFlowService } from "../services/orderFlowService";
 import { apiRequest } from "../config/api";
 import { useTenantSelection } from "../contexts/TenantSelectionContext";
-import type { OrderFlowStep } from "../types";
+
+// Extend OrderFlowStep for UI display
+type OrderFlowStepUI = import("../types").OrderFlowStep & {
+  orderProjectName?: string;
+  orderBatchName?: string;
+};
 
 interface TenantOrderFlowManagementProps {}
 
@@ -34,12 +39,10 @@ const TenantOrderFlowManagement: React.FC<
 > = () => {
   const { getSelectedTenant, selectedTenantIdentifier } = useTenantSelection();
   const [selectedTenant, setSelectedTenant] = useState(getSelectedTenant());
-  const [steps, setSteps] = useState<OrderFlowStep[]>([]);
-  const [originalSteps, setOriginalSteps] = useState<OrderFlowStep[]>([]);
-  const [availableStatuses, setAvailableStatuses] = useState<string[]>([]);
+  const [steps, setSteps] = useState<OrderFlowStepUI[]>([]);
+  const [originalSteps, setOriginalSteps] = useState<OrderFlowStepUI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setSaving] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -48,86 +51,34 @@ const TenantOrderFlowManagement: React.FC<
   useEffect(() => {
     const tenant = getSelectedTenant();
     setSelectedTenant(tenant);
-    if (tenant?.tenantId) {
-      loadOrderStatuses();
-    }
-    // Don't call loadOrderFlow here!
-  }, [selectedTenantIdentifier]);
-
-  // When availableStatuses is loaded, then load order flow
-  useEffect(() => {
-    if (selectedTenant?.tenantId && availableStatuses.length > 0) {
-      loadOrderFlow(selectedTenant.tenantId);
-    }
-  }, [availableStatuses, selectedTenant?.tenantId]);
-
-  // Fetch available order statuses from API
-  const loadOrderStatuses = async () => {
-    try {
-      const response = await apiRequest("/api/order-statuses", {
-        method: "GET",
-      });
-      const data = await response.json();
-      // If API returns an array of objects, map to array of names
-      if (Array.isArray(data)) {
-        setAvailableStatuses(data.map((statusObj: any) => statusObj.name));
-      } else if (Array.isArray(data.statuses)) {
-        setAvailableStatuses(
-          data.statuses.map((statusObj: any) => statusObj.name || statusObj)
-        );
-      } else {
-        setAvailableStatuses([]);
-      }
-    } catch (err) {
-      setAvailableStatuses([]);
-    }
-  };
-
-  useEffect(() => {
-    // Check if there are unsaved changes
-    const hasChangedSteps =
-      JSON.stringify(steps) !== JSON.stringify(originalSteps);
-    setHasChanges(hasChangedSteps);
-  }, [steps, originalSteps]);
-
-  const loadOrderFlow = async (tenantId?: string) => {
-    const idToUse = tenantId || selectedTenant?.tenantId;
-    if (!idToUse) {
-      setIsLoading(false);
-      return;
-    }
-
+    if (!tenant?.tenantId) return;
     setIsLoading(true);
     setError(null);
-    try {
-      // Try to get existing tenant order flow
-      const orderFlow = await orderFlowService.getTenantOrderFlow(idToUse);
-      if (
-        orderFlow &&
-        Array.isArray(orderFlow.steps) &&
-        orderFlow.steps.length > 0
-      ) {
-        setSteps(orderFlow.steps);
-        setOriginalSteps(orderFlow.steps);
-      } else {
-        throw new Error("No steps found");
-      }
-    } catch (error) {
-      // If no existing flow, use availableStatuses to build default steps
-      const defaultSteps = availableStatuses.map((status, index) => ({
-        id: `step-${status.toLowerCase()}`,
-        status: status as any, // Cast to OrderStatus
-        rank: index + 1,
-        isActive: true,
-        label: status,
-        description: "",
-      }));
-      setSteps(defaultSteps);
-      setOriginalSteps(defaultSteps);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    apiRequest("/api/order-flows", { method: "GET" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Failed to fetch order flows");
+        const data = await response.json();
+        // Map API response to OrderFlowStep type
+        const mapped = (Array.isArray(data) ? data : []).map((item: any) => ({
+          id: item.id,
+          status: item.orderStatusId,
+          label: item.statusName,
+          rank: item.rank,
+          isActive: item.isActive,
+          orderProjectName: item.orderProjectName,
+          orderBatchName: item.orderBatchName,
+        }));
+        mapped.sort((a, b) => a.rank - b.rank);
+        setSteps(mapped);
+        setOriginalSteps(mapped);
+      })
+      .catch(() => setError("Failed to load order flow steps"))
+      .finally(() => setIsLoading(false));
+  }, [selectedTenantIdentifier]);
+
+  useEffect(() => {
+    setHasChanges(JSON.stringify(steps) !== JSON.stringify(originalSteps));
+  }, [steps, originalSteps]);
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -150,32 +101,52 @@ const TenantOrderFlowManagement: React.FC<
   };
 
   const handleSave = async () => {
-    if (!selectedTenant?.tenantId) return;
-
+    if (isSaving) return; // Prevent duplicate API calls
+    // Validate at least one step
+    if (!steps.length) {
+      setError("At least one step is required.");
+      return;
+    }
     try {
       setSaving(true);
       setError(null);
 
-      // Validate the flow
+      // Validate the flow (only rank/duplicate checks)
       const validation = orderFlowService.validateOrderFlow(steps);
       if (!validation.isValid) {
         setError(`Validation failed: ${validation.errors.join(", ")}`);
         return;
       }
 
-      // Call new API for each step
-      for (const step of steps) {
-        await orderFlowService.createOrderFlow({
-          orderId: Number(selectedTenant.tenantId),
-          orderStatusId:
-            typeof step.status === "number" ? step.status : step.rank, // Use status if number, else fallback
-          rank: step.rank,
-          isActive: step.isActive,
-        });
+      // Build steps array for API (camelCase)
+      const apiSteps = steps.map((step) => ({
+        orderStatusId:
+          typeof step.status === "number" ? step.status : Number(step.status),
+        rank: step.rank,
+        isActive: step.isActive,
+      }));
+
+      let response,
+        ok = false;
+      try {
+        response = await orderFlowService.createOrderFlow(apiSteps);
+        // If API returns a Response object, check status
+        if (response && typeof response === "object" && "success" in response) {
+          ok = response.success;
+        } else {
+          ok = true; // treat as success if no explicit error
+        }
+      } catch (e: any) {
+        setError(e?.message || "Failed to save order flow");
+        return;
       }
-      setOriginalSteps([...steps]);
-      setSuccessMessage("Order flow saved successfully!");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      if (ok) {
+        setOriginalSteps([...steps]);
+        setSuccessMessage("Order flow saved successfully!");
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError((response && response.message) || "Failed to save order flow");
+      }
     } catch (error) {
       console.error("Failed to save order flow:", error);
       setError(
@@ -183,42 +154,6 @@ const TenantOrderFlowManagement: React.FC<
       );
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleReset = async () => {
-    if (!selectedTenant?.tenantId) return;
-
-    try {
-      setIsResetting(true);
-      setError(null);
-
-      // TODO: Implement when API endpoints are ready
-      console.log("Reset functionality - API endpoints not yet implemented");
-
-      // Use default steps for now
-      const defaultSteps = orderFlowService.getDefaultFlowSteps();
-      setSteps(defaultSteps);
-      setOriginalSteps(defaultSteps);
-      setSuccessMessage("Order flow reset to default (demo mode)!");
-      setTimeout(() => setSuccessMessage(null), 3000);
-
-      /* TODO: Uncomment when API is ready
-      const defaultFlow = await orderFlowService.resetToDefaultFlow(
-        selectedTenant.tenantId
-      );
-      setSteps(defaultFlow.steps);
-      setOriginalSteps(defaultFlow.steps);
-      setSuccessMessage("Order flow reset to default successfully!");
-      setTimeout(() => setSuccessMessage(null), 3000);
-      */
-    } catch (error) {
-      console.error("Failed to reset order flow:", error);
-      setError(
-        error instanceof Error ? error.message : "Failed to reset order flow"
-      );
-    } finally {
-      setIsResetting(false);
     }
   };
 
@@ -281,18 +216,6 @@ const TenantOrderFlowManagement: React.FC<
             >
               <Eye className="h-4 w-4 mr-2" />
               {showPreview ? "Hide" : "Show"} Preview
-            </Button>
-            <Button
-              onClick={handleReset}
-              variant="outline"
-              disabled={isResetting || isLoading}
-            >
-              {isResetting ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RotateCcw className="h-4 w-4 mr-2" />
-              )}
-              Reset to Default
             </Button>
             <Button
               onClick={handleSave}
@@ -368,7 +291,7 @@ const TenantOrderFlowManagement: React.FC<
                     {steps.map((step, index) => (
                       <Draggable
                         key={step.id}
-                        draggableId={step.id}
+                        draggableId={String(step.id)}
                         index={index}
                       >
                         {(provided, snapshot) => (
@@ -403,16 +326,25 @@ const TenantOrderFlowManagement: React.FC<
                                   </h3>
                                   <span
                                     className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                                      step.status,
+                                      step.label,
                                       step.isActive
                                     )}`}
                                   >
-                                    {step.status}
+                                    {step.label}
                                   </span>
                                 </div>
-                                {step.description && (
-                                  <p className="text-gray-600 text-sm">
-                                    {step.description}
+                                {/* Optionally show orderProjectName/orderBatchName */}
+                                {(step.orderProjectName ||
+                                  step.orderBatchName) && (
+                                  <p className="text-gray-500 text-xs mt-1">
+                                    {step.orderProjectName && (
+                                      <span>
+                                        Project: {step.orderProjectName}{" "}
+                                      </span>
+                                    )}
+                                    {step.orderBatchName && (
+                                      <span>Batch: {step.orderBatchName}</span>
+                                    )}
                                   </p>
                                 )}
                               </div>

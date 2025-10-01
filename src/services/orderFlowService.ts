@@ -2,6 +2,11 @@ import { apiRequest } from "../config/api";
 import type { TenantOrderFlow, OrderFlowStep, OrderStatus } from "../types";
 
 class OrderFlowService {
+  // Get all order flows (steps)
+  async getOrderFlows(): Promise<OrderFlowStep[]> {
+    const response = await apiRequest(`/api/order-flows`, { method: "GET" });
+    return response.json();
+  }
   // Get tenant order flow configuration
   async getTenantOrderFlow(tenantId: string): Promise<TenantOrderFlow> {
     const response = await apiRequest(`/api/tenantorderflow/${tenantId}`, {
@@ -10,16 +15,13 @@ class OrderFlowService {
     return response.json();
   }
 
-  // Create new order flow (new API)
-  async createOrderFlow(request: {
-    orderId: number;
-    orderStatusId: number;
-    rank: number;
-    isActive: boolean;
-  }): Promise<any> {
+  // Create new order flow (steps only, per new API contract)
+  async createOrderFlow(
+    steps: { orderStatusId: number; rank: number; isActive: boolean }[]
+  ): Promise<any> {
     const response = await apiRequest(`/api/order-flows`, {
       method: "POST",
-      body: JSON.stringify(request),
+      body: JSON.stringify({ steps }),
     });
     return response.json();
   }
@@ -115,24 +117,6 @@ class OrderFlowService {
   } {
     const errors: string[] = [];
 
-    // Check if Created status is present and first
-    const createdStep = steps.find(
-      (step) => step.status === ("Created" as OrderStatus)
-    );
-    if (!createdStep) {
-      errors.push("Created status is required and must be present in the flow");
-    } else if (createdStep.rank !== 1) {
-      errors.push("Created status must be the first step in the flow");
-    }
-
-    // Check if Completed status is present
-    const completedStep = steps.find(
-      (step) => step.status === ("Completed" as OrderStatus)
-    );
-    if (!completedStep) {
-      errors.push("Completed status is required in the flow");
-    }
-
     // Check for duplicate ranks
     const ranks = steps.map((step) => step.rank);
     const uniqueRanks = new Set(ranks);
@@ -143,7 +127,7 @@ class OrderFlowService {
     }
 
     // Check for gaps in ranking
-    const sortedRanks = ranks.sort((a, b) => a - b);
+    const sortedRanks = ranks.slice().sort((a, b) => a - b);
     for (let i = 0; i < sortedRanks.length; i++) {
       if (sortedRanks[i] !== i + 1) {
         errors.push("Ranks must be consecutive starting from 1");
