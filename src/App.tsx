@@ -23,6 +23,7 @@ import CreateBatch from "./pages/CreateBatch";
 import BatchManagement from "./pages/BatchManagement";
 import OperatorDashboard from "./pages/OperatorDashboard";
 import UserManagement from "./components/UserManagement";
+import RolesManagement from "./pages/RolesManagement";
 import TenantManagement from "./components/TenantManagement";
 import GlobalSchemaManagement from "./components/GlobalSchemaManagement";
 import TenantOrderFlowManagement from "./pages/TenantOrderFlowManagement";
@@ -221,6 +222,15 @@ function App() {
                 element={
                   <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
                     <UserManagement />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="roles"
+                element={
+                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                    <RolesManagement />
                   </ProtectedRoute>
                 }
               />

@@ -391,3 +391,31 @@ export interface OrderFlowPreview {
   totalSteps: number;
   estimatedDuration?: number;
 }
+
+// Role Management Types
+export interface Role {
+  id: number;
+  name: string;
+  permissions: Permission[];
+}
+
+export interface Permission {
+  id: number;
+  name: string;
+}
+
+export interface CreateRoleRequest {
+  name: string;
+  permissionIds: number[];
+}
+
+export interface UpdateRoleRequest {
+  id: number;
+  name: string;
+  permissionIds: number[];
+}
+
+export interface RoleWithPermissions extends Role {
+  permissionCount: number;
+  userCount?: number;
+}

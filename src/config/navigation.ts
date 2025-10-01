@@ -120,6 +120,13 @@ export const navigationItems: NavigationItem[] = [
     roles: [PRODUCT_OWNER_ROLE],
   },
   {
+    id: "roles-management",
+    label: "Roles Management",
+    icon: "Shield",
+    path: "/roles",
+    roles: [PRODUCT_OWNER_ROLE],
+  },
+  {
     id: "order-status-management",
     label: "Order Status Management",
     icon: "ListChecks",
