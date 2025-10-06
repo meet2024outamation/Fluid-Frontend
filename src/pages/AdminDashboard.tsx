@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   Users,
@@ -6,11 +6,12 @@ import {
   FileText,
   CheckCircle,
   Database,
-  Upload,
   Plus,
   TrendingUp,
   Clock,
   AlertTriangle,
+  User,
+  Filter,
 } from "lucide-react";
 import {
   Card,
@@ -21,10 +22,15 @@ import {
 } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { useTenantSelection } from "../contexts/TenantSelectionContext";
+import { useAssignedOrders } from "../hooks/useAssignedOrders";
+import { useAuth } from "../contexts/AuthContext";
+import type { Order } from "../services/orderService";
 
 export const AdminDashboard: React.FC = () => {
   const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
     useTenantSelection();
+  const { getUserDisplayName } = useAuth();
+  const { assignedOrders, totalCount, isLoading, error } = useAssignedOrders();
 
   // Redirect tenant admin users to tenant selection if they haven't selected a tenant
   if (isTenantAdmin && needsTenantSelection) {
@@ -35,45 +41,72 @@ export const AdminDashboard: React.FC = () => {
   if (needsProjectSelection) {
     return <Navigate to="/project-selection" replace />;
   }
-  // Mock data - in real app, this would come from API
-  const stats = {
-    totalProjects: 24,
-    activeBatches: 12,
-    pendingOrders: 156,
-    completedOrders: 2389,
-    dailyProductivity: [
-      { date: "2024-01-15", ordersProcessed: 45, averageTime: 12.5 },
-      { date: "2024-01-16", ordersProcessed: 52, averageTime: 11.8 },
-      { date: "2024-01-17", ordersProcessed: 38, averageTime: 13.2 },
-    ],
+  // Calculate stats from assigned orders
+  const stats = React.useMemo(() => {
+    const pendingOrders = assignedOrders.filter(
+      (order) =>
+        order.status.toLowerCase() === "pending" ||
+        order.status.toLowerCase() === "assigned"
+    ).length;
+
+    const inProgressOrders = assignedOrders.filter(
+      (order) =>
+        order.status.toLowerCase() === "processing" ||
+        order.status.toLowerCase() === "in_progress"
+    ).length;
+
+    const completedOrders = assignedOrders.filter(
+      (order) => order.status.toLowerCase() === "completed"
+    ).length;
+
+    return {
+      totalAssigned: totalCount,
+      pendingOrders,
+      inProgressOrders,
+      completedOrders,
+    };
+  }, [assignedOrders, totalCount]);
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateString;
+    }
   };
 
-  const recentActivity = [
-    {
-      id: 1,
-      action: 'New project "ABC Corp" created',
-      time: "2 minutes ago",
-      type: "project",
-    },
-    {
-      id: 2,
-      action: "Batch B-2024-001 completed",
-      time: "15 minutes ago",
-      type: "batch",
-    },
-    {
-      id: 3,
-      action: 'Schema "Invoice V2" updated',
-      time: "1 hour ago",
-      type: "schema",
-    },
-    {
-      id: 4,
-      action: "23 orders processed by John Doe",
-      time: "2 hours ago",
-      type: "order",
-    },
-  ];
+  const getStatusBadge = (status: string) => {
+    const statusColors = {
+      pending: "bg-yellow-100 text-yellow-800",
+      assigned: "bg-blue-100 text-blue-800",
+      processing: "bg-blue-100 text-blue-800",
+      in_progress: "bg-blue-100 text-blue-800",
+      completed: "bg-green-100 text-green-800",
+      failed: "bg-red-100 text-red-800",
+      cancelled: "bg-gray-100 text-gray-800",
+    };
+
+    const colorClass =
+      statusColors[status.toLowerCase() as keyof typeof statusColors] ||
+      "bg-gray-100 text-gray-800";
+
+    return (
+      <span
+        className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}
+      >
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    );
+  };
+
+  // Helper functions have been moved to the top of the component
 
   return (
     <div className="space-y-8">
@@ -82,78 +115,103 @@ export const AdminDashboard: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-2">
-            Overview of system performance and quick actions
+            Welcome back, {getUserDisplayName()}! Here are your assigned orders
+            and quick actions.
           </p>
         </div>
         <div className="flex space-x-3">
+          <Link to="/orders">
+            <Button variant="outline">
+              <Package className="w-4 h-4 mr-2" />
+              View All Orders
+            </Button>
+          </Link>
           <Link to="/projects">
             <Button variant="outline">
               <Plus className="w-4 h-4 mr-2" />
               Create Project
             </Button>
           </Link>
-          <Link to="/schemas">
-            <Button>
-              <Upload className="w-4 h-4 mr-2" />
-              Upload Schema
-            </Button>
-          </Link>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Project Filter */}
+      <Card className="mb-4">
+        <div className="p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Filter by Project:</span>
+            </div>
+            <div className="flex-1 max-w-xs">
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                disabled={isLoading}
+              >
+                <option value="">All Projects</option>
+                {/* TODO: Add project options when project API is available */}
+              </select>
+            </div>
+            <div className="text-sm text-gray-500">
+              Showing {stats.totalAssigned} assigned orders
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Assigned Orders Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Projects
+              Total Assigned
             </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <User className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProjects}</div>
-            <p className="text-xs text-muted-foreground">+2 from last month</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Active Batches
-            </CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeBatches}</div>
+            <div className="text-2xl font-bold">{stats.totalAssigned}</div>
             <p className="text-xs text-muted-foreground">
-              3 processing, 9 ready
+              Orders assigned to you
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Pending Orders
-            </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.pendingOrders}</div>
-            <p className="text-xs text-muted-foreground">-12% from yesterday</p>
+            <p className="text-xs text-muted-foreground">
+              Awaiting your action
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Completed Orders
-            </CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.inProgressOrders}</div>
+            <p className="text-xs text-muted-foreground">
+              Currently processing
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.completedOrders}</div>
-            <p className="text-xs text-muted-foreground">+18% from last week</p>
+            <p className="text-xs text-muted-foreground">
+              Successfully finished
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -196,65 +254,178 @@ export const AdminDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
+        {/* My Assigned Orders */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest system events and updates</CardDescription>
+            <CardTitle>My Assigned Orders</CardTitle>
+            <CardDescription>Orders currently assigned to you</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center space-x-3">
-                  <div className="flex-shrink-0">
-                    {activity.type === "project" && (
-                      <Users className="h-4 w-4 text-blue-500" />
-                    )}
-                    {activity.type === "batch" && (
-                      <Package className="h-4 w-4 text-green-500" />
-                    )}
-                    {activity.type === "schema" && (
-                      <Database className="h-4 w-4 text-purple-500" />
-                    )}
-                    {activity.type === "order" && (
-                      <FileText className="h-4 w-4 text-orange-500" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900">{activity.action}</p>
-                    <p className="text-xs text-gray-500">{activity.time}</p>
-                  </div>
+            {isLoading ? (
+              <div className="text-center py-4">
+                <div className="text-gray-600">Loading assigned orders...</div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-4">
+                <div className="text-red-600">
+                  Failed to load orders: {error}
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : assignedOrders.length === 0 ? (
+              <div className="text-center py-8">
+                <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-500">No orders assigned to you yet</p>
+                <Link to="/orders">
+                  <Button variant="outline" className="mt-4">
+                    Browse Available Orders
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {assignedOrders.slice(0, 5).map((order: Order) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-medium">
+                          #{order.id}
+                        </span>
+                        {getStatusBadge(order.status)}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {order.batchFileName} • Created{" "}
+                        {formatDate(order.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          order.priority === 1
+                            ? "bg-red-100 text-red-800"
+                            : order.priority === 2
+                              ? "bg-orange-100 text-orange-800"
+                              : order.priority === 3
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        P{order.priority}
+                      </span>
+                      <Button size="sm" variant="outline">
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {assignedOrders.length > 5 && (
+                  <div className="text-center pt-2">
+                    <Link to="/orders">
+                      <Button variant="ghost" size="sm">
+                        View all {assignedOrders.length} orders →
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Performance Metrics */}
+      {/* Quick Actions & Workflow */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
             <TrendingUp className="h-5 w-5 mr-2" />
-            Performance Metrics
+            Quick Actions
           </CardTitle>
-          <CardDescription>Daily productivity overview</CardDescription>
+          <CardDescription>
+            Streamline your workflow with these actions
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">145</div>
-              <p className="text-sm text-gray-600">Orders Today</p>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">11.2 min</div>
-              <p className="text-sm text-gray-600">Avg. Processing Time</p>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">98.5%</div>
-              <p className="text-sm text-gray-600">Accuracy Rate</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link to="/orders" className="block">
+              <Button
+                className="w-full justify-start h-auto p-4"
+                variant="outline"
+              >
+                <div className="text-left">
+                  <Package className="h-5 w-5 mb-2" />
+                  <div className="font-medium">View All Orders</div>
+                  <div className="text-xs text-gray-500">
+                    Browse and manage orders
+                  </div>
+                </div>
+              </Button>
+            </Link>
+
+            <Link to="/projects" className="block">
+              <Button
+                className="w-full justify-start h-auto p-4"
+                variant="outline"
+              >
+                <div className="text-left">
+                  <Users className="h-5 w-5 mb-2" />
+                  <div className="font-medium">Browse Projects</div>
+                  <div className="text-xs text-gray-500">
+                    Access project details
+                  </div>
+                </div>
+              </Button>
+            </Link>
+
+            <Link to="/batches" className="block">
+              <Button
+                className="w-full justify-start h-auto p-4"
+                variant="outline"
+              >
+                <div className="text-left">
+                  <Database className="h-5 w-5 mb-2" />
+                  <div className="font-medium">Manage Batches</div>
+                  <div className="text-xs text-gray-500">
+                    Process batch data
+                  </div>
+                </div>
+              </Button>
+            </Link>
+
+            <Button
+              className="w-full justify-start h-auto p-4"
+              variant="outline"
+              onClick={() => window.location.reload()}
+            >
+              <div className="text-left">
+                <CheckCircle className="h-5 w-5 mb-2" />
+                <div className="font-medium">Refresh</div>
+                <div className="text-xs text-gray-500">
+                  Update dashboard data
+                </div>
+              </div>
+            </Button>
           </div>
+
+          {assignedOrders.length > 0 && (
+            <div className="mt-6 pt-4 border-t">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">
+                  Your productivity insights:
+                </span>
+                <span className="font-medium">
+                  Completion Rate:{" "}
+                  {stats.completedOrders > 0
+                    ? Math.round(
+                        (stats.completedOrders / stats.totalAssigned) * 100
+                      )
+                    : 0}
+                  %
+                </span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

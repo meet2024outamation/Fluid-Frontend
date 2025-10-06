@@ -57,14 +57,7 @@ export const navigationItems: NavigationItem[] = [
     requiredPermissions: ["ViewReports", "ViewProjects"], // ANY: reports or can view projects
     roles: ["Product Owner", "Tenant Admin"], // Legacy fallback
   },
-  {
-    id: "operator-dashboard",
-    label: "My Dashboard",
-    icon: "LayoutDashboard",
-    path: "/operator",
-    requiredPermissions: ["ViewOrders", "ProcessOrders"], // Permission-based access (ANY)
-    roles: ["Keying"], // Legacy fallback
-  },
+
   {
     id: "projects",
     label: "Project Management",

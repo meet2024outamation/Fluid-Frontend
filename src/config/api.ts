@@ -22,6 +22,7 @@ export const API_CONFIG = {
     GLOBAL_SCHEMAS: "/api/global-schemas",
     BATCHES: "/api/batches",
     ORDERS: "/api/orders",
+    ORDER_STATUSES: "/api/order-statuses",
     FIELD_MAPPINGS: "/api/field-mappings",
     ROLES: "/api/roles",
     // Authentication endpoints
@@ -387,3 +388,6 @@ export const meApiRequest = async (options?: {
     overrideProjectId: options?.projectId ?? null,
   });
 };
+
+// Temporary alias to fix import error - will be removed once source is found
+export const apiAutoRequest = apiRequest;

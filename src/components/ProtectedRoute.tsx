@@ -23,66 +23,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   fallbackComponent: FallbackComponent,
   redirectTo,
 }) => {
-  const { user, isLoading, isFullyAuthenticated } = useAuth();
+  // ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
+  const { user, isLoading, isFullyAuthenticated, meDataLoaded } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!user || !isFullyAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Get user's roles from Me data
+  // Get user's roles from Me data (hook-dependent, so call early)
   const meData = permissionService.getMeData();
   const userRoles = meData?.Roles || [];
 
-  // PRIORITIZE PERMISSION-BASED ACCESS CONTROL
-  const requiredPerms = permission ? [permission] : permissions || [];
-
-  // If permissions are specified, check them first (preferred approach)
-  if (requiredPerms.length > 0) {
-    // Use permission service for permission-based checking
-    const hasPermissionAccess = permissionService.canAccessRoute({
-      permission,
-      permissions,
-      requireAll,
-    });
-
-    if (!hasPermissionAccess) {
-      return renderAccessDenied(
-        "Insufficient Permissions",
-        requiredPerms,
-        "permissions"
-      );
-    }
-  }
-  // FALLBACK TO ROLE-BASED ACCESS CONTROL (for backward compatibility)
-  else if (requiredRoles && requiredRoles.length > 0) {
-    const hasRoleAccess = RoleService.hasRole(
-      userRoles,
-      requiredRoles,
-      requireAllRoles
-    );
-
-    if (!hasRoleAccess) {
-      return renderAccessDenied("Insufficient Roles", requiredRoles, "roles");
-    }
-  }
-
-  return <>{children}</>;
-
   // Helper function to render access denied message
-  function renderAccessDenied(
+  const renderAccessDenied = (
     _title: string,
-    required: string[],
+    _required: string[],
     type: "roles" | "permissions"
-  ) {
+  ) => {
     // If custom fallback component provided, use it
     if (FallbackComponent) {
       return <FallbackComponent />;
@@ -131,5 +85,89 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         </div>
       </div>
     );
+  };
+
+  // NOW we can do conditional returns after all hooks have been called
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
+
+  if (!user || !isFullyAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Check if we need to wait for ME data to load
+  const savedTenantIdentifier = localStorage.getItem(
+    "selectedTenantIdentifier"
+  );
+  const savedSelectionConfirmed = localStorage.getItem("selectionConfirmed");
+  const hasPermissionRequirements =
+    permission || (permissions && permissions.length > 0);
+
+  // If user has saved selections and we need permissions, wait for ME data to load
+  if (
+    hasPermissionRequirements &&
+    savedTenantIdentifier &&
+    savedSelectionConfirmed === "true" &&
+    !meDataLoaded
+  ) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="mt-4 text-gray-600">Loading permissions...</div>
+      </div>
+    );
+  }
+
+  if (import.meta.env.DEV) {
+    console.log("[ProtectedRoute] Permission check:", {
+      path: location.pathname,
+      permission,
+      permissions,
+      requireAll,
+      meDataLoaded,
+      hasMe: !!meData,
+      userPermissions: permissionService.getUserPermissionNames(),
+      userRoles: permissionService.getUserRoleNames(),
+    });
+  }
+
+  // PRIORITIZE PERMISSION-BASED ACCESS CONTROL
+  const requiredPerms = permission ? [permission] : permissions || [];
+
+  // If permissions are specified, check them first (preferred approach)
+  if (requiredPerms.length > 0) {
+    // Use permission service for permission-based checking
+    const hasPermissionAccess = permissionService.canAccessRoute({
+      permission,
+      permissions,
+      requireAll,
+    });
+
+    if (!hasPermissionAccess) {
+      return renderAccessDenied(
+        "Insufficient Permissions",
+        requiredPerms,
+        "permissions"
+      );
+    }
+  }
+  // FALLBACK TO ROLE-BASED ACCESS CONTROL (for backward compatibility)
+  else if (requiredRoles && requiredRoles.length > 0) {
+    const hasRoleAccess = RoleService.hasRole(
+      userRoles,
+      requiredRoles,
+      requireAllRoles
+    );
+
+    if (!hasRoleAccess) {
+      return renderAccessDenied("Insufficient Roles", requiredRoles, "roles");
+    }
+  }
+
+  return <>{children}</>;
 };

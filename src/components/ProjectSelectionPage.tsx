@@ -55,7 +55,7 @@ export const ProjectSelectionPage: React.FC = () => {
 
   const handleProjectSelect = (projectId: number) => {
     selectProject(projectId);
-    // After project selection, redirect to operator dashboard
+    // After project selection, redirect to orders page
   };
 
   const handleBackToTenants = () => {

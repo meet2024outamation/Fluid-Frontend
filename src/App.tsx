@@ -23,13 +23,14 @@ import ProjectManagement from "./pages/ProjectManagement";
 import ProjectForm from "./pages/ProjectForm";
 import CreateBatch from "./pages/CreateBatch";
 import BatchManagement from "./pages/BatchManagement";
-import OperatorDashboard from "./pages/OperatorDashboard";
 import UserManagement from "./components/UserManagement";
 import RolesManagement from "./pages/RolesManagement";
 import TenantManagement from "./components/TenantManagement";
 import GlobalSchemaManagement from "./components/GlobalSchemaManagement";
 import TenantOrderFlowManagement from "./pages/TenantOrderFlowManagement";
 import ProductOwnerOrderStatusManagement from "./pages/ProductOwnerOrderStatusManagement";
+import OrdersPage from "./pages/OrdersPage";
+import OrderDetailsPage from "./pages/OrderDetailsPage";
 import "./App.css";
 
 function App() {
@@ -110,7 +111,7 @@ function App() {
                 path="batches"
                 element={
                   <ProtectedRoute
-                    permissions={["ViewBatches", "CreateOrder"]}
+                    permissions={["ViewBatches"]}
                     requireAll={false}
                   >
                     <BatchManagement />
@@ -290,19 +291,6 @@ function App() {
                 }
               />
 
-              {/* Operator Routes */}
-              <Route
-                path="operator"
-                element={
-                  <ProtectedRoute
-                    permissions={["ViewOrders", "ProcessOrders"]}
-                    requireAll={false}
-                  >
-                    <OperatorDashboard />
-                  </ProtectedRoute>
-                }
-              />
-
               <Route
                 path="orders"
                 element={
@@ -310,12 +298,19 @@ function App() {
                     permissions={["ViewOrders", "ProcessOrders"]}
                     requireAll={false}
                   >
-                    <div className="p-8 text-center">
-                      <h1 className="text-2xl font-bold mb-4">
-                        Order Processing
-                      </h1>
-                      <p className="text-gray-600">Coming soon...</p>
-                    </div>
+                    <OrdersPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="orders/:id"
+                element={
+                  <ProtectedRoute
+                    permissions={["ViewOrders", "ProcessOrders"]}
+                    requireAll={false}
+                  >
+                    <OrderDetailsPage />
                   </ProtectedRoute>
                 }
               />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useTenantSelection } from "../contexts/TenantSelectionContext";
+import { DirectProjectSelection } from "./DirectProjectSelection";
 
 import {
   Card,
@@ -19,6 +20,7 @@ interface TenantProjectSelectionFlowProps {
 export const TenantProjectSelectionFlow: React.FC<
   TenantProjectSelectionFlowProps
 > = ({ onSelectionComplete }) => {
+  // ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
   const {
     isAuthenticated,
     accessibleTenants,
@@ -44,63 +46,6 @@ export const TenantProjectSelectionFlow: React.FC<
   >("tenant");
   const [isCallMeApi, setIsCallMeApi] = useState(false);
   const navigate = useNavigate();
-
-  // Redirect if not authenticated
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Loading states
-  if (authLoading || tenantLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            Loading your access information...
-          </h2>
-          <p className="text-gray-600">
-            Please wait while we fetch your tenants and projects.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // No access - show appropriate message
-  if (
-    !accessibleTenants ||
-    (!isProductOwner &&
-      (!accessibleTenants.tenantAdminIds ||
-        accessibleTenants.tenantAdminIds.length === 0) &&
-      (!accessibleTenants.tenants || accessibleTenants.tenants.length === 0))
-  ) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-            <h1 className="text-xl font-bold mb-2">No Access Available</h1>
-            <p className="text-sm">
-              You don't currently have access to any tenants or projects in this
-              system. Please contact your administrator to request access.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => navigate("/login")}
-            className="mt-4"
-          >
-            Back to Login
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Product Owner - skip selection and redirect directly
-  if (isProductOwner) {
-    return <Navigate to="/dashboard" replace />;
-  }
 
   // Determine current step based on selection state
   useEffect(() => {
@@ -168,6 +113,69 @@ export const TenantProjectSelectionFlow: React.FC<
     selectedProjectId,
     selectedTenantIdentifier,
   ]);
+
+  // NOW we can do conditional returns after all hooks have been called
+  // Redirect if not authenticated
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Loading states
+  if (authLoading || tenantLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            Loading your access information...
+          </h2>
+          <p className="text-gray-600">
+            Please wait while we fetch your tenants and projects.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // No access - show appropriate message
+  if (
+    !accessibleTenants ||
+    (!isProductOwner &&
+      (!accessibleTenants.tenantAdminIds ||
+        accessibleTenants.tenantAdminIds.length === 0) &&
+      (!accessibleTenants.tenants || accessibleTenants.tenants.length === 0))
+  ) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+            <h1 className="text-xl font-bold mb-2">No Access Available</h1>
+            <p className="text-sm">
+              You don't currently have access to any tenants or projects in this
+              system. Please contact your administrator to request access.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => navigate("/login")}
+            className="mt-4"
+          >
+            Back to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Product Owner - skip selection and redirect directly
+  if (isProductOwner) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Regular users (not tenant admin, not product owner) - use direct project selection
+  if (!isProductOwner && !isTenantAdmin && hasProjectAccess) {
+    return <DirectProjectSelection />;
+  }
 
   const handleTenantSelect = async (tenantIdentifier: string) => {
     try {

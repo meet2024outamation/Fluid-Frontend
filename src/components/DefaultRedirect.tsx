@@ -73,14 +73,14 @@ export const DefaultRedirect: React.FC = () => {
     return <Navigate to="/project-selection" replace />;
   }
 
-  // 6. After all selections are made, route to appropriate dashboard
+  // 6. After all selections are made, route to appropriate page
   if (selectedTenantIdentifier) {
     if (selectedProjectId) {
-      // Has both tenant and project - go to operator dashboard
-      return <Navigate to="/operator" replace />;
+      // Has both tenant and project - go to orders page
+      return <Navigate to="/orders" replace />;
     } else if (!needsProjectSelection) {
-      // Has tenant but doesn't need project - go to operator dashboard
-      return <Navigate to="/operator" replace />;
+      // Has tenant but doesn't need project - go to orders page
+      return <Navigate to="/orders" replace />;
     }
   }
 
