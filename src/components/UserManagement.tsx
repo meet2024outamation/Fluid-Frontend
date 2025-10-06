@@ -160,9 +160,10 @@ const UserManagement: React.FC = () => {
 
   // Role management helper functions
   const addRole = () => {
-    // Validate based on role type
-    const isProductOwner = newRole.roleId === 1;
-    const isTenantAdmin = newRole.roleId === 2;
+    // Validate based on role type using role names instead of hardcoded IDs
+    const selectedRole = roleOptions.find((r: any) => r.id === newRole.roleId);
+    const isProductOwner = selectedRole?.name === "Product Owner";
+    const isTenantAdmin = selectedRole?.name === "Tenant Admin";
 
     // Check if required fields are filled based on role
     const isValid =
@@ -1561,24 +1562,27 @@ const UserManagement: React.FC = () => {
                                 </div>
                               )}
                               {/* Role scope descriptions */}
-                              {role.roleId === 1 && (
+                              {role.roleName === "Product Owner" && (
                                 <div className="text-green-600 text-xs bg-green-50 p-2 rounded">
                                   <strong>Global Access:</strong> Full access to
                                   all tenants and projects across the system
                                 </div>
                               )}
-                              {role.roleId === 2 && (
+                              {role.roleName === "Tenant Admin" && (
                                 <div className="text-blue-600 text-xs bg-blue-50 p-2 rounded">
                                   <strong>Tenant Access:</strong> Full access to
                                   all projects within this tenant
                                 </div>
                               )}
-                              {role.roleId > 2 && (
-                                <div className="text-purple-600 text-xs bg-purple-50 p-2 rounded">
-                                  <strong>Project Access:</strong> Specific
-                                  access to this project within the tenant
-                                </div>
-                              )}
+                              {role.roleName &&
+                                !["Product Owner", "Tenant Admin"].includes(
+                                  role.roleName
+                                ) && (
+                                  <div className="text-purple-600 text-xs bg-purple-50 p-2 rounded">
+                                    <strong>Project Access:</strong> Specific
+                                    access to this project within the tenant
+                                  </div>
+                                )}
                             </div>
                           </div>
                         ))}

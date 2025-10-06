@@ -1,12 +1,7 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { getUserPrimaryRole } from "../config/navigation";
-import {
-  PRODUCT_OWNER_ROLE,
-  TENANT_ADMIN_ROLE,
-  OPERATOR_ROLE,
-} from "../config/roles";
+// Removed role constants import - using string literals now
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -20,20 +15,9 @@ export const LoginPage: React.FC = () => {
   const { user, login, isLoading, isFullyAuthenticated } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Redirect if already authenticated and fully loaded
+  // Redirect if already authenticated and fully loaded - let DefaultRedirect handle the logic
   if (user && isFullyAuthenticated && !isLoading) {
-    // Role-based redirection
-    const primaryRole = getUserPrimaryRole(user);
-    switch (primaryRole) {
-      case PRODUCT_OWNER_ROLE:
-        return <Navigate to="/dashboard" replace />;
-      case TENANT_ADMIN_ROLE:
-        return <Navigate to="/batches" replace />;
-      case OPERATOR_ROLE:
-        return <Navigate to="/operator" replace />;
-      default:
-        return <Navigate to="/dashboard" replace />;
-    }
+    return <Navigate to="/" replace />;
   }
 
   const handleLogin = async () => {

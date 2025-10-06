@@ -16,13 +16,11 @@ import {
   Building,
   ChevronDown,
   GitBranch,
+  ListChecks,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTenantSelection } from "../../contexts/TenantSelectionContext";
-import {
-  getNavigationForUser,
-  getUserPrimaryRole,
-} from "../../config/navigation";
+import { getNavigationForUser } from "../../config/navigation";
 import { Button } from "../ui/button";
 
 const iconMap = {
@@ -36,10 +34,12 @@ const iconMap = {
   UserCog,
   Building,
   GitBranch,
+  ListChecks,
 };
 
 export const MainLayout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, getUserDisplayName, getUserRoles, getUserPermissions } =
+    useAuth();
   const { getSelectedTenant, isProductOwner, clearSelection } =
     useTenantSelection();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -165,11 +165,16 @@ export const MainLayout: React.FC = () => {
                 </button>
               )}
 
-              <div className="flex items-center space-x-2">
+              <div
+                className="flex items-center space-x-2"
+                title={`Permissions: ${getUserPermissions().join(", ")}`}
+              >
                 <User size={20} className="text-gray-600" />
-                <span className="text-sm text-gray-700">{`${user.firstName} ${user.lastName}`}</span>
+                <span className="text-sm text-gray-700">
+                  {getUserDisplayName()}
+                </span>
                 <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                  {getUserPrimaryRole(user)}
+                  {getUserRoles().join(", ") || "No Role"}
                 </span>
               </div>
               <Button

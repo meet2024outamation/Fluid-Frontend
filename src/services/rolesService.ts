@@ -1,4 +1,10 @@
-import type { Role, Permission, CreateRoleRequest, UpdateRoleRequest, RoleWithPermissions } from "../types";
+import type {
+  Role,
+  Permission,
+  CreateRoleRequest,
+  UpdateRoleRequest,
+  RoleWithPermissions,
+} from "../types";
 import { API_CONFIG, apiRequest } from "../config/api";
 
 export interface RoleFilters {
@@ -34,18 +40,20 @@ class RolesService {
       });
 
       const data = await this.handleResponse<any[]>(response);
-      
+
       let filteredData = data;
-      
+
       // Apply client-side filtering since API doesn't support query params
       if (filters?.search) {
         const searchTerm = filters.search.toLowerCase();
-        filteredData = filteredData.filter(role => 
+        filteredData = filteredData.filter((role) =>
           role.name.toLowerCase().includes(searchTerm)
         );
       }
-      
-      return filteredData.map((role: any) => this.parseRoleWithPermissions(role));
+
+      return filteredData.map((role: any) =>
+        this.parseRoleWithPermissions(role)
+      );
     } catch (error) {
       console.error("Error fetching roles:", error);
       throw error;
@@ -99,7 +107,10 @@ class RolesService {
     }
   }
 
-  async updateRole(id: number, roleData: Omit<UpdateRoleRequest, 'id'>): Promise<Role> {
+  async updateRole(
+    id: number,
+    roleData: Omit<UpdateRoleRequest, "id">
+  ): Promise<Role> {
     try {
       const response = await apiRequest(`${API_CONFIG.ENDPOINTS.ROLES}/${id}`, {
         method: "PUT",
@@ -136,7 +147,7 @@ class RolesService {
   }> {
     try {
       const roles = await this.getRoles();
-      
+
       return {
         total: roles.length,
       };

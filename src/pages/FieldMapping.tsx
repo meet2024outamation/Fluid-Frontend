@@ -88,14 +88,27 @@ const FieldMappingPage: React.FC = () => {
       setError(null);
 
       // Load schemas assigned to this project
-      const assignedSchemas = await schemaService.getSchemasByClientId(
+      const assignedSchemasResponse = await schemaService.getSchemasByClientId(
         project.id
       );
 
+      if (!assignedSchemasResponse.success || !assignedSchemasResponse.data) {
+        setError("Failed to load project schemas");
+        return;
+      }
+
+      const assignedSchemas = assignedSchemasResponse.data;
+
       // Load full schema details with fields for each assigned schema
-      const schemasWithFields = await Promise.all(
+      const schemaResponses = await Promise.all(
         assignedSchemas.map((schema) => schemaService.getSchemaById(schema.id))
       );
+
+      // Extract successful schema data
+      const schemasWithFields: Schema[] = schemaResponses
+        .filter((response) => response.success && response.data)
+        .map((response) => response.data!);
+
       setProjectSchemasWithFields(schemasWithFields);
 
       // Load existing field mappings for this project (with error handling)
@@ -104,7 +117,7 @@ const FieldMappingPage: React.FC = () => {
         existingMappings = await fieldMappingService.getFieldMappings(
           project.id
         );
-        console.log("Loaded existing mappings:", existingMappings);
+        // Loaded existing mappings successfully
       } catch (error) {
         console.warn("Could not load existing field mappings:", error);
         // Continue without existing mappings - this is not a critical error
@@ -112,7 +125,7 @@ const FieldMappingPage: React.FC = () => {
 
       // Initialize field mappings object
       const initialMappings: { [key: string]: string } = {};
-      schemasWithFields.forEach((schema) => {
+      schemasWithFields.forEach((schema: Schema) => {
         schema.schemaFields.forEach((field) => {
           const key = `${schema.id}_${field.id}`;
 
@@ -184,12 +197,12 @@ const FieldMappingPage: React.FC = () => {
             schemaId: Number(schemaId),
             fieldMappings,
           };
-          console.log("Saving field mapping request:", request);
+          // Saving field mapping request
           return fieldMappingService.createBulkFieldMapping(request);
         }
       );
 
-      console.log("Saving", savePromises.length, "schema mappings");
+      // Saving schema mappings
       await Promise.all(savePromises);
 
       // Show success modal

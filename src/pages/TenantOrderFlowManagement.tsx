@@ -25,6 +25,7 @@ import {
 import { orderFlowService } from "../services/orderFlowService";
 import { apiRequest } from "../config/api";
 import { useTenantSelection } from "../contexts/TenantSelectionContext";
+import { notificationService } from "../services/notificationService";
 
 // Extend OrderFlowStep for UI display
 type OrderFlowStepUI = import("../types").OrderFlowStep & {
@@ -72,7 +73,10 @@ const TenantOrderFlowManagement: React.FC<
         setSteps(mapped);
         setOriginalSteps(mapped);
       })
-      .catch(() => setError("Failed to load order flow steps"))
+      .catch(() => {
+        setError("Failed to load order flow steps");
+        notificationService.error("Failed to load order flow steps");
+      })
       .finally(() => setIsLoading(false));
   }, [selectedTenantIdentifier]);
 

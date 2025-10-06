@@ -1,4 +1,5 @@
-import { API_CONFIG, apiRequest } from "../config/api";
+import { API_CONFIG, apiRequest, ApiError } from "../config/api";
+import type { ApiResponse } from "../types";
 
 export interface SchemaField {
   id: number;
@@ -91,85 +92,180 @@ class SchemaService {
       const errorData = await response
         .json()
         .catch(() => ({ message: "Unknown error occurred" }));
-      throw new Error(
-        errorData.message || `HTTP ${response.status}: ${response.statusText}`
+
+      // Create ApiError to enable validation error handling
+      throw new ApiError(
+        errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+        response.status,
+        errorData
       );
     }
     return response.json();
   }
 
   // Regular Schema Methods
-  async getAllSchemas(): Promise<SchemaListResponse[]> {
-    const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
-      method: "GET",
-    });
-    return this.handleResponse<SchemaListResponse[]>(response);
-  }
-
-  async getSchemasByClientId(clientId: number): Promise<SchemaListResponse[]> {
-    const response = await apiRequest(
-      `${API_CONFIG.ENDPOINTS.SCHEMAS}?projectId=${clientId}`,
-      {
+  async getAllSchemas(): Promise<ApiResponse<SchemaListResponse[]>> {
+    try {
+      const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
         method: "GET",
+      });
+      const data = await this.handleResponse<SchemaListResponse[]>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
       }
-    );
-    return this.handleResponse<SchemaListResponse[]>(response);
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
   }
 
-  async getSchemaById(schemaId: number): Promise<Schema> {
-    const response = await apiRequest(
-      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
-      {
-        method: "GET",
+  async getSchemasByClientId(
+    clientId: number
+  ): Promise<ApiResponse<SchemaListResponse[]>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}?projectId=${clientId}`,
+        {
+          method: "GET",
+        }
+      );
+      const data = await this.handleResponse<SchemaListResponse[]>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
       }
-    );
-    return this.handleResponse<Schema>(response);
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
   }
 
-  async createSchema(request: CreateSchemaRequest): Promise<Schema> {
-    const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
-      method: "POST",
-      body: JSON.stringify({
-        Name: request.name,
-        Description: request.description || null,
-        SchemaFields: request.schemaFields.map((field) => ({
-          FieldName: field.fieldName,
-          FieldLabel: field.fieldLabel,
-          DataType: field.dataType,
-          Format: field.format || null,
-          IsRequired: field.isRequired,
-          DisplayOrder: field.displayOrder,
-        })),
-      }),
-    });
-
-    return this.handleResponse<Schema>(response);
+  async getSchemaById(schemaId: number): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
+        {
+          method: "GET",
+        }
+      );
+      const data = await this.handleResponse<Schema>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
   }
 
-  async updateSchema(request: UpdateSchemaRequest): Promise<Schema> {
-    const response = await apiRequest(
-      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${request.id}`,
-      {
-        method: "PUT",
+  async createSchema(
+    request: CreateSchemaRequest
+  ): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(API_CONFIG.ENDPOINTS.SCHEMAS, {
+        method: "POST",
         body: JSON.stringify({
           Name: request.name,
           Description: request.description || null,
-          IsActive: request.isActive,
-          SchemaFields: request.schemaFields
-            .filter((field) => !field.isDeleted) // Only include non-deleted fields
-            .map((field) => ({
-              FieldName: field.fieldName,
-              FieldLabel: field.fieldLabel,
-              DataType: field.dataType,
-              Format: field.format || null,
-              IsRequired: field.isRequired,
-              DisplayOrder: field.displayOrder,
-            })),
+          SchemaFields: request.schemaFields.map((field) => ({
+            FieldName: field.fieldName,
+            FieldLabel: field.fieldLabel,
+            DataType: field.dataType,
+            Format: field.format || null,
+            IsRequired: field.isRequired,
+            DisplayOrder: field.displayOrder,
+          })),
         }),
-      }
-    );
+      });
 
-    return this.handleResponse<Schema>(response);
+      const data = await this.handleResponse<Schema>(response);
+      return { success: true, data, message: "Schema created successfully" };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Failed to create schema",
+      };
+    }
+  }
+
+  async updateSchema(
+    request: UpdateSchemaRequest
+  ): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/${request.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            Name: request.name,
+            Description: request.description || null,
+            IsActive: request.isActive,
+            SchemaFields: request.schemaFields
+              .filter((field) => !field.isDeleted) // Only include non-deleted fields
+              .map((field) => ({
+                FieldName: field.fieldName,
+                FieldLabel: field.fieldLabel,
+                DataType: field.dataType,
+                Format: field.format || null,
+                IsRequired: field.isRequired,
+                DisplayOrder: field.displayOrder,
+              })),
+          }),
+        }
+      );
+
+      const data = await this.handleResponse<Schema>(response);
+      return { success: true, data, message: "Schema updated successfully" };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Failed to update schema",
+      };
+    }
   }
 
   async deleteSchema(schemaId: number): Promise<void> {
@@ -193,82 +289,189 @@ class SchemaService {
   async toggleSchemaStatus(
     schemaId: number,
     isActive: boolean
-  ): Promise<Schema> {
-    const response = await apiRequest(
-      `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          IsActive: isActive,
-        }),
-      }
-    );
+  ): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            IsActive: isActive,
+          }),
+        }
+      );
 
-    return this.handleResponse<Schema>(response);
+      const data = await this.handleResponse<Schema>(response);
+      return {
+        success: true,
+        data,
+        message: `Schema ${isActive ? "activated" : "deactivated"} successfully`,
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to update schema status",
+      };
+    }
   }
 
   // Global Schema Methods for Product Owner
-  async getAllGlobalSchemas(): Promise<SchemaListResponse[]> {
-    const response = await apiRequest(API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS, {
-      method: "GET",
-    });
-    return this.handleResponse<SchemaListResponse[]>(response);
-  }
-
-  async getGlobalSchemaById(schemaId: number): Promise<Schema> {
-    const response = await apiRequest(
-      `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
-      {
+  async getAllGlobalSchemas(): Promise<ApiResponse<SchemaListResponse[]>> {
+    try {
+      const response = await apiRequest(API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS, {
         method: "GET",
+      });
+      const data = await this.handleResponse<SchemaListResponse[]>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
       }
-    );
-    return this.handleResponse<Schema>(response);
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
   }
 
-  async createGlobalSchema(request: CreateSchemaRequest): Promise<Schema> {
-    const response = await apiRequest(API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS, {
-      method: "POST",
-      body: JSON.stringify({
-        Name: request.name,
-        Description: request.description || null,
-        SchemaFields: request.schemaFields.map((field) => ({
-          FieldName: field.fieldName,
-          FieldLabel: field.fieldLabel,
-          DataType: field.dataType,
-          Format: field.format || null,
-          IsRequired: field.isRequired,
-          DisplayOrder: field.displayOrder,
-        })),
-      }),
-    });
-
-    return this.handleResponse<Schema>(response);
+  async getGlobalSchemaById(schemaId: number): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
+        {
+          method: "GET",
+        }
+      );
+      const data = await this.handleResponse<Schema>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
   }
 
-  async updateGlobalSchema(request: UpdateSchemaRequest): Promise<Schema> {
-    const response = await apiRequest(
-      `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${request.id}`,
-      {
-        method: "PUT",
+  async createGlobalSchema(
+    request: CreateSchemaRequest
+  ): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS, {
+        method: "POST",
         body: JSON.stringify({
           Name: request.name,
           Description: request.description || null,
-          IsActive: request.isActive,
-          SchemaFields: request.schemaFields
-            .filter((field) => !field.isDeleted) // Only include non-deleted fields
-            .map((field) => ({
-              FieldName: field.fieldName,
-              FieldLabel: field.fieldLabel,
-              DataType: field.dataType,
-              Format: field.format || null,
-              IsRequired: field.isRequired,
-              DisplayOrder: field.displayOrder,
-            })),
+          SchemaFields: request.schemaFields.map((field) => ({
+            FieldName: field.fieldName,
+            FieldLabel: field.fieldLabel,
+            DataType: field.dataType,
+            Format: field.format || null,
+            IsRequired: field.isRequired,
+            DisplayOrder: field.displayOrder,
+          })),
         }),
-      }
-    );
+      });
 
-    return this.handleResponse<Schema>(response);
+      const data = await this.handleResponse<Schema>(response);
+      return {
+        success: true,
+        data,
+        message: "Global schema created successfully",
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to create global schema",
+      };
+    }
+  }
+
+  async updateGlobalSchema(
+    request: UpdateSchemaRequest
+  ): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${request.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            Name: request.name,
+            Description: request.description || null,
+            IsActive: request.isActive,
+            SchemaFields: request.schemaFields
+              .filter((field) => !field.isDeleted) // Only include non-deleted fields
+              .map((field) => ({
+                FieldName: field.fieldName,
+                FieldLabel: field.fieldLabel,
+                DataType: field.dataType,
+                Format: field.format || null,
+                IsRequired: field.isRequired,
+                DisplayOrder: field.displayOrder,
+              })),
+          }),
+        }
+      );
+
+      const data = await this.handleResponse<Schema>(response);
+      return {
+        success: true,
+        data,
+        message: "Global schema updated successfully",
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to update global schema",
+      };
+    }
   }
 
   async deleteGlobalSchema(schemaId: number): Promise<void> {
@@ -292,18 +495,41 @@ class SchemaService {
   async toggleGlobalSchemaStatus(
     schemaId: number,
     isActive: boolean
-  ): Promise<Schema> {
-    const response = await apiRequest(
-      `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          IsActive: isActive,
-        }),
-      }
-    );
+  ): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            IsActive: isActive,
+          }),
+        }
+      );
 
-    return this.handleResponse<Schema>(response);
+      const data = await this.handleResponse<Schema>(response);
+      return {
+        success: true,
+        data,
+        message: `Global schema ${isActive ? "activated" : "deactivated"} successfully`,
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to update global schema status",
+      };
+    }
   }
 
   validateSchema(schema: CreateSchemaRequest | UpdateSchemaRequest): {

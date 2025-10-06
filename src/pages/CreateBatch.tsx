@@ -24,6 +24,7 @@ import { useTenantSelection } from "../contexts/TenantSelectionContext";
 import type { CreateBatchFormData, BatchCreationStep } from "../types";
 import { batchService } from "../services/batchService";
 import { projectService, type ApiProject } from "../services/projectService";
+import { notificationService } from "../services/notificationService";
 
 const CreateBatch: React.FC = () => {
   const { isTenantAdmin, needsTenantSelection, needsProjectSelection } =
@@ -239,8 +240,10 @@ const CreateBatch: React.FC = () => {
           formData.documents.length > 0 ? formData.documents : undefined,
       };
 
-      const response = await batchService.createBatch(request);
-      console.log("Batch created successfully:", response);
+      await batchService.createBatch(request);
+
+      // Handle success notification and form reset
+      notificationService.success("Batch created successfully");
       setSubmitSuccess(true);
 
       // Reset form after successful submission
@@ -257,9 +260,10 @@ const CreateBatch: React.FC = () => {
         setSubmitSuccess(false);
       }, 3000);
     } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : "Failed to create batch"
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to create batch";
+      notificationService.error(errorMessage);
+      setSubmitError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

@@ -1,20 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Plus, 
-  Search, 
-  Edit3, 
-  Trash2, 
-  Shield, 
-  Users, 
+import {
+  Plus,
+  Search,
+  Edit3,
+  Trash2,
+  Shield,
+  Users,
   AlertTriangle,
   CheckCircle2,
-  XCircle
+  XCircle,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Modal } from "../components/ui/modal";
+import { PermissionGuard } from "../components/PermissionGuard";
+import { useAuth } from "../contexts/AuthContext";
 import { rolesService } from "../services/rolesService";
-import type { RoleWithPermissions, Permission, CreateRoleRequest } from "../types";
+import type {
+  RoleWithPermissions,
+  Permission,
+  CreateRoleRequest,
+} from "../types";
 
 interface Toast {
   id: string;
@@ -23,36 +29,43 @@ interface Toast {
 }
 
 const RolesManagement: React.FC = () => {
+  const { hasPermission } = useAuth();
   const [roles, setRoles] = useState<RoleWithPermissions[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [permissionFilter, setPermissionFilter] = useState("");
-  
+
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<RoleWithPermissions | null>(null);
-  
+  const [selectedRole, setSelectedRole] = useState<RoleWithPermissions | null>(
+    null
+  );
+
   // Form states
   const [formData, setFormData] = useState({
     name: "",
-    permissionIds: [] as number[]
+    permissionIds: [] as number[],
   });
-  
+
   // Toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Filtered data
-  const filteredRoles = roles.filter(role => {
-    const matchesSearch = role.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredRoles = roles.filter((role) => {
+    const matchesSearch = role.name
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
-  const filteredPermissions = permissions.filter(permission => {
+  const filteredPermissions = permissions.filter((permission) => {
     if (!permissionFilter) return true;
-    return permission.name.toLowerCase().includes(permissionFilter.toLowerCase());
+    return permission.name
+      .toLowerCase()
+      .includes(permissionFilter.toLowerCase());
   });
 
   // Load data
@@ -87,16 +100,16 @@ const RolesManagement: React.FC = () => {
   const showToast = (message: string, type: "success" | "error") => {
     const id = Date.now().toString();
     const newToast: Toast = { id, message, type };
-    setToasts(prev => [...prev, newToast]);
-    
+    setToasts((prev) => [...prev, newToast]);
+
     // Auto remove toast after 3 seconds
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3000);
   };
 
   const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   const handleCreateRole = async () => {
@@ -108,7 +121,7 @@ const RolesManagement: React.FC = () => {
 
       const roleData: CreateRoleRequest = {
         name: formData.name.trim(),
-        permissionIds: formData.permissionIds
+        permissionIds: formData.permissionIds,
       };
 
       await rolesService.createRole(roleData);
@@ -130,7 +143,7 @@ const RolesManagement: React.FC = () => {
 
       const roleData = {
         name: formData.name.trim(),
-        permissionIds: formData.permissionIds
+        permissionIds: formData.permissionIds,
       };
 
       await rolesService.updateRole(selectedRole.id, roleData);
@@ -161,7 +174,7 @@ const RolesManagement: React.FC = () => {
     setSelectedRole(role);
     setFormData({
       name: role.name,
-      permissionIds: role.permissions.map(p => p.id)
+      permissionIds: role.permissions.map((p) => p.id),
     });
     setIsEditModalOpen(true);
   };
@@ -174,17 +187,17 @@ const RolesManagement: React.FC = () => {
   const resetForm = () => {
     setFormData({
       name: "",
-      permissionIds: []
+      permissionIds: [],
     });
     setSelectedRole(null);
   };
 
   const handlePermissionToggle = (permissionId: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       permissionIds: prev.permissionIds.includes(permissionId)
-        ? prev.permissionIds.filter(id => id !== permissionId)
-        : [...prev.permissionIds, permissionId]
+        ? prev.permissionIds.filter((id) => id !== permissionId)
+        : [...prev.permissionIds, permissionId],
     }));
   };
 
@@ -206,13 +219,15 @@ const RolesManagement: React.FC = () => {
             Manage roles and their permissions
           </p>
         </div>
-        <Button 
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Create Role
-        </Button>
+        <PermissionGuard permission="ManageRoles">
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Create Role
+          </Button>
+        </PermissionGuard>
       </div>
 
       {/* Search and Filters */}
@@ -277,35 +292,43 @@ const RolesManagement: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditModal(role)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        <Edit3 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDeleteModal(role)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <PermissionGuard permission="ManageRoles">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditModal(role)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </Button>
+                      </PermissionGuard>
+                      <PermissionGuard permission="ManageRoles">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDeleteModal(role)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </PermissionGuard>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          
+
           {filteredRoles.length === 0 && (
             <div className="text-center py-12">
               <Shield className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No roles found</h3>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">
+                No roles found
+              </h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm ? "Try adjusting your search criteria" : "Get started by creating a new role"}
+                {searchTerm
+                  ? "Try adjusting your search criteria"
+                  : "Get started by creating a new role"}
               </p>
             </div>
           )}
@@ -331,7 +354,9 @@ const RolesManagement: React.FC = () => {
               type="text"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
               placeholder="Enter role name"
             />
           </div>
@@ -370,7 +395,8 @@ const RolesManagement: React.FC = () => {
               ))}
             </div>
             <div className="mt-2 text-sm text-gray-600">
-              {formData.permissionIds.length} of {permissions.length} permissions selected
+              {formData.permissionIds.length} of {permissions.length}{" "}
+              permissions selected
             </div>
           </div>
 
@@ -384,9 +410,7 @@ const RolesManagement: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleCreateRole}>
-              Create Role
-            </Button>
+            <Button onClick={handleCreateRole}>Create Role</Button>
           </div>
         </div>
       </Modal>
@@ -410,7 +434,9 @@ const RolesManagement: React.FC = () => {
               type="text"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
               placeholder="Enter role name"
             />
           </div>
@@ -449,7 +475,8 @@ const RolesManagement: React.FC = () => {
               ))}
             </div>
             <div className="mt-2 text-sm text-gray-600">
-              {formData.permissionIds.length} of {permissions.length} permissions selected
+              {formData.permissionIds.length} of {permissions.length}{" "}
+              permissions selected
             </div>
           </div>
 
@@ -463,9 +490,7 @@ const RolesManagement: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleEditRole}>
-              Update Role
-            </Button>
+            <Button onClick={handleEditRole}>Update Role</Button>
           </div>
         </div>
       </Modal>
@@ -490,13 +515,17 @@ const RolesManagement: React.FC = () => {
                 Delete Role "{selectedRole?.name}"
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                This action cannot be undone. This will permanently delete the role and remove all associated permissions.
+                This action cannot be undone. This will permanently delete the
+                role and remove all associated permissions.
               </p>
-              {selectedRole && selectedRole.userCount && selectedRole.userCount > 0 && (
-                <p className="text-sm text-red-600 mt-2 font-medium">
-                  Warning: This role is currently assigned to {selectedRole.userCount} user(s).
-                </p>
-              )}
+              {selectedRole &&
+                selectedRole.userCount &&
+                selectedRole.userCount > 0 && (
+                  <p className="text-sm text-red-600 mt-2 font-medium">
+                    Warning: This role is currently assigned to{" "}
+                    {selectedRole.userCount} user(s).
+                  </p>
+                )}
             </div>
           </div>
 
@@ -510,10 +539,7 @@ const RolesManagement: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteRole}
-            >
+            <Button variant="destructive" onClick={handleDeleteRole}>
               Delete Role
             </Button>
           </div>
@@ -526,8 +552,8 @@ const RolesManagement: React.FC = () => {
           <div
             key={toast.id}
             className={`flex items-center gap-3 px-4 py-3 rounded-md shadow-lg ${
-              toast.type === "success" 
-                ? "bg-green-50 border border-green-200" 
+              toast.type === "success"
+                ? "bg-green-50 border border-green-200"
                 : "bg-red-50 border border-red-200"
             }`}
           >
@@ -536,9 +562,11 @@ const RolesManagement: React.FC = () => {
             ) : (
               <XCircle className="h-5 w-5 text-red-600" />
             )}
-            <span className={`text-sm font-medium ${
-              toast.type === "success" ? "text-green-800" : "text-red-800"
-            }`}>
+            <span
+              className={`text-sm font-medium ${
+                toast.type === "success" ? "text-green-800" : "text-red-800"
+              }`}
+            >
               {toast.message}
             </span>
             <button

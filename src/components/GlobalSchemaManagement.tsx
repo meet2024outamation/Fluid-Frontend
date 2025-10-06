@@ -36,16 +36,24 @@ const GlobalSchemaManagement: React.FC = () => {
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   // Modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [schemaToDelete, setSchemaToDelete] =
     useState<SchemaListResponse | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [schemaToView, setSchemaToView] = useState<Schema | null>(null);
+  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+  const [errorModalContent, setErrorModalContent] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState<number | null>(null);
+
+  const showErrorModal = (title: string, message: string) => {
+    setErrorModalContent({ title, message });
+    setIsErrorModalOpen(true);
+  };
 
   useEffect(() => {
     loadGlobalSchemas();
@@ -65,12 +73,19 @@ const GlobalSchemaManagement: React.FC = () => {
   const loadGlobalSchemas = async () => {
     try {
       setIsLoading(true);
-      setError(null);
-      const data = await schemaService.getAllGlobalSchemas();
-      setSchemas(data);
+      const response = await schemaService.getAllGlobalSchemas();
+      if (response.success && response.data) {
+        setSchemas(response.data);
+      } else {
+        showErrorModal(
+          "Failed to Load Global Schemas",
+          response.message || "Failed to load global schemas"
+        );
+      }
     } catch (error) {
       console.error("Failed to load global schemas:", error);
-      setError(
+      showErrorModal(
+        "Failed to Load Global Schemas",
         error instanceof Error ? error.message : "Failed to load global schemas"
       );
     } finally {
@@ -89,7 +104,8 @@ const GlobalSchemaManagement: React.FC = () => {
       setSchemaToDelete(null);
     } catch (error) {
       console.error("Failed to delete global schema:", error);
-      setError(
+      showErrorModal(
+        "Failed to Delete Schema",
         error instanceof Error
           ? error.message
           : "Failed to delete global schema"
@@ -102,29 +118,38 @@ const GlobalSchemaManagement: React.FC = () => {
   const handleToggleStatus = async (schema: SchemaListResponse) => {
     try {
       setIsTogglingStatus(schema.id);
-      const updatedSchema = await schemaService.toggleGlobalSchemaStatus(
+      const response = await schemaService.toggleGlobalSchemaStatus(
         schema.id,
         !schema.isActive
       );
 
-      // Convert the full Schema response to SchemaListResponse format
-      const updatedListSchema: SchemaListResponse = {
-        id: updatedSchema.id,
-        name: updatedSchema.name,
-        description: updatedSchema.description,
-        version: 1, // Default or get from response
-        isActive: updatedSchema.isActive,
-        schemaFieldCount: updatedSchema.schemaFields?.length || 0,
-        createdAt: updatedSchema.createdAt,
-        createdByName: "Unknown", // Default or get from response
-      };
+      if (response.success && response.data) {
+        const updatedSchema = response.data;
+        // Convert the full Schema response to SchemaListResponse format
+        const updatedListSchema: SchemaListResponse = {
+          id: updatedSchema.id,
+          name: updatedSchema.name,
+          description: updatedSchema.description,
+          version: 1, // Default or get from response
+          isActive: updatedSchema.isActive,
+          schemaFieldCount: updatedSchema.schemaFields?.length || 0,
+          createdAt: updatedSchema.createdAt,
+          createdByName: "Unknown", // Default or get from response
+        };
 
-      setSchemas((prev) =>
-        prev.map((s) => (s.id === schema.id ? updatedListSchema : s))
-      );
+        setSchemas((prev) =>
+          prev.map((s) => (s.id === schema.id ? updatedListSchema : s))
+        );
+      } else {
+        showErrorModal(
+          "Failed to Toggle Schema Status",
+          response.message || "Failed to toggle schema status"
+        );
+      }
     } catch (error) {
       console.error("Failed to toggle schema status:", error);
-      setError(
+      showErrorModal(
+        "Failed to Toggle Schema Status",
         error instanceof Error
           ? error.message
           : "Failed to update schema status"
@@ -142,12 +167,22 @@ const GlobalSchemaManagement: React.FC = () => {
   const openViewModal = async (schema: SchemaListResponse) => {
     try {
       // Fetch the full schema details for the view modal
-      const fullSchema = await schemaService.getGlobalSchemaById(schema.id);
-      setSchemaToView(fullSchema);
-      setShowViewModal(true);
+      const response = await schemaService.getGlobalSchemaById(schema.id);
+      if (response.success && response.data) {
+        setSchemaToView(response.data);
+        setShowViewModal(true);
+      } else {
+        showErrorModal(
+          "Failed to Load Schema Details",
+          response.message || "Failed to load global schema details"
+        );
+      }
     } catch (error) {
       console.error("Failed to fetch global schema details:", error);
-      setError("Failed to load global schema details");
+      showErrorModal(
+        "Failed to Load Schema Details",
+        "Failed to load global schema details"
+      );
     }
   };
 
@@ -267,22 +302,6 @@ const GlobalSchemaManagement: React.FC = () => {
             </Button>
           </div>
         </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
-            <p className="text-red-700">{error}</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setError(null)}
-              className="ml-auto text-red-600 hover:text-red-700"
-            >
-              ✕
-            </Button>
-          </div>
-        )}
 
         {/* Loading State */}
         {isLoading ? (
@@ -607,6 +626,31 @@ const GlobalSchemaManagement: React.FC = () => {
               </div>
             </div>
           )}
+        </Modal>
+
+        {/* Error Modal */}
+        <Modal
+          isOpen={isErrorModalOpen}
+          onClose={() => {
+            setIsErrorModalOpen(false);
+            setErrorModalContent(null);
+          }}
+          title={errorModalContent?.title || "Error"}
+        >
+          <div className="text-center p-6">
+            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
+            <p className="text-gray-600 mb-4">{errorModalContent?.message}</p>
+            <Button
+              onClick={() => {
+                setIsErrorModalOpen(false);
+                setErrorModalContent(null);
+              }}
+              className="mt-4"
+            >
+              OK
+            </Button>
+          </div>
         </Modal>
       </div>
     </div>

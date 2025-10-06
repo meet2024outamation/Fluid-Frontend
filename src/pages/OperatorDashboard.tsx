@@ -26,9 +26,10 @@ import { useAuth } from "../contexts/AuthContext";
 import type { Order, OrderStatus, OrderPriority } from "../types";
 import { orderService, type OrderFilters } from "../services/orderService";
 import { mapApiOrderToOrder, getPriorityNumber } from "../utils/orderUtils";
+import { notificationService } from "../services/notificationService";
 
 const OperatorDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, getUserDisplayName } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,8 +130,8 @@ const OperatorDashboard: React.FC = () => {
       );
 
       // In a real app, this would make an API call
-      console.log(
-        `Order ${orderId} assigned to ${user ? `${user.firstName} ${user.lastName}` : "Unknown User"}`
+      notificationService.success(
+        `Order ${orderId} assigned to ${getUserDisplayName()}`
       );
     } catch (error) {
       console.error("Failed to assign order:", error);
@@ -147,7 +148,7 @@ const OperatorDashboard: React.FC = () => {
       );
 
       // In a real app, this would navigate to the order processing page
-      console.log(`Started processing order ${orderId}`);
+      notificationService.success(`Started processing order ${orderId}`);
     } catch (error) {
       console.error("Failed to start processing:", error);
     }

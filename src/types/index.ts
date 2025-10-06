@@ -1,4 +1,31 @@
-// User and Authentication Types
+// User and Authentication Types - Updated for dynamic roles/permissions
+export interface UserRole {
+  roleId: number;
+  roleName: string;
+  description?: string;
+}
+
+export interface UserPermission {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+export interface CurrentUser {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  roles: UserRole[];
+  permissions: UserPermission[];
+  currentTenantId?: string;
+  currentTenantName?: string;
+  currentProjectId?: string | null;
+  currentProjectName?: string | null;
+}
+
+// Legacy User interface for backward compatibility
 export interface User {
   id: number; // Changed from string to number to match C# int Id
   email: string;
@@ -7,6 +34,7 @@ export interface User {
   phone?: string;
   isActive: boolean;
   roles: ProjectRole[];
+  permissions?: LegacyUserPermission[]; // Add permissions for access control
   createdAt: Date;
   updatedAt?: Date; // Made optional to match C# DateTime?
 }
@@ -33,6 +61,55 @@ export interface ProjectRole {
   tenantName?: string;
   projectName?: string;
   roleName?: string;
+  permissions?: string[]; // Permissions associated with this role
+}
+
+// Legacy permission-related types for backward compatibility
+export interface LegacyUserPermission {
+  id: number;
+  name: string;
+  resource?: string;
+  action?: string;
+}
+
+// Permission info from backend
+export interface PermissionInfo {
+  Id: number;
+  Name: string;
+  Description?: string;
+}
+
+// User role info from backend
+export interface UserRoleInfo {
+  Id: number;
+  Name: string;
+  Description?: string;
+  Permissions?: PermissionInfo[];
+}
+
+// Me API Response structure
+export interface UserMeResponse {
+  Id: number;
+  Email: string;
+  FirstName: string;
+  LastName: string;
+  Phone?: string;
+  IsActive: boolean;
+  Roles: UserRoleInfo[];
+  Permissions: PermissionInfo[];
+  CurrentTenantId?: string;
+  CurrentTenantName?: string;
+  CurrentProjectId?: number;
+  CurrentProjectName?: string;
+  CreatedAt: string;
+  UpdatedAt?: string;
+}
+
+// Route permission configuration
+export interface RoutePermission {
+  permission?: string;
+  permissions?: string[];
+  requireAll?: boolean; // If true, user must have ALL permissions; if false, ANY permission
 }
 
 // Types for dropdown data in forms
@@ -51,9 +128,6 @@ export interface RoleOption {
   id: number;
   name: string;
 }
-
-// Use role constants from config/roles.ts for all role string values throughout the project
-export type UserRole = "Product Owner" | "Tenant Admin" | "Operator";
 
 // Accessible Tenants Response Types
 export interface AccessibleTenantsResponse {
@@ -208,10 +282,32 @@ export type BatchStatus =
   | "Error";
 
 export interface ValidationError {
+  key: string;
+  errorMessage: string;
+  severity: number; // 0 = Error, 1 = Warning
+}
+
+// Legacy validation error (keep for backward compatibility)
+export interface LegacyValidationError {
   id: string;
   field: string;
   message: string;
   severity: "Error" | "Warning";
+}
+
+// Legacy API Error Response Types (for backward compatibility)
+export interface LegacyApiErrorResponse {
+  message?: string;
+  validationErrors?: ValidationError[];
+  errors?: Record<string, string[]>; // ASP.NET Core model validation format
+}
+
+// Form validation error mapping
+export interface FormValidationError {
+  field: string;
+  message: string;
+  type: "server" | "client";
+  severity: "error" | "warning";
 }
 
 // Batch Creation Types
@@ -319,16 +415,121 @@ export interface NavigationItem {
   label: string;
   icon: string;
   path: string;
-  roles: UserRole[];
+  // PREFERRED: Permission-based access control
+  requiredPermissions?: string[]; // Permissions required to access this item
+  requireAllPermissions?: boolean; // If true, user must have ALL permissions; if false, ANY permission
+  // LEGACY: Role-based access control (kept for backward compatibility)
+  roles?: string[]; // Dynamic role names from backend
+  permission?: string; // Single permission required (alias for requiredPermissions with single item)
+  permissions?: string[]; // Multiple permissions (alias for requiredPermissions)
   children?: NavigationItem[];
 }
 
-// API Response Types
-export interface ApiResponse<T> {
+// Standardized API Response Types (based on project/order flow management)
+export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
-  error?: string;
   message?: string;
+  error?: string;
+  errors?: Record<string, string[]> | string[]; // Support both ASP.NET Core and array formats
+  validationErrors?: ValidationError[];
+  status?: number;
+}
+
+// Error Response Types
+export interface ApiErrorResponse {
+  success: false;
+  message?: string;
+  error?: string;
+  errors?: Record<string, string[]> | string[];
+  validationErrors?: ValidationError[];
+  status: number;
+}
+
+// Success Response Types
+export interface ApiSuccessResponse<T = any> {
+  success: true;
+  data?: T;
+  message?: string;
+  status?: number;
+}
+
+// Notification Types
+export interface NotificationOptions {
+  duration?: number;
+  position?:
+    | "top-right"
+    | "top-left"
+    | "bottom-right"
+    | "bottom-left"
+    | "top-center"
+    | "bottom-center";
+  showIcon?: boolean;
+  closable?: boolean;
+}
+
+export interface NotificationMessage {
+  id: string;
+  type: "success" | "error" | "warning" | "info";
+  title?: string;
+  message: string;
+  timestamp: number;
+  options?: NotificationOptions;
+}
+
+// Form Integration Types
+export interface FormFieldMapping {
+  [backendField: string]: string; // backend field -> frontend field
+}
+
+export interface FormNotificationResult {
+  mappedToFields: number;
+  unmappedErrors: ValidationError[];
+  totalErrors: number;
+}
+
+// Enhanced Validation Error Handler Types
+export interface ValidationErrorHandler {
+  handleValidationErrors: (errors: ValidationError[]) => void;
+  clearValidationErrors: () => void;
+  hasValidationErrors: boolean;
+}
+
+// Form Error Handler Types
+export interface FormErrorSetter {
+  (field: string, error: { type: string; message: string }): void;
+}
+
+export interface FormErrorClearer {
+  (field?: string): void;
+}
+
+// Notification Service Types
+export interface NotificationService {
+  success: (message: string, options?: NotificationOptions) => string;
+  error: (message: string, options?: NotificationOptions) => string;
+  warning: (message: string, options?: NotificationOptions) => string;
+  info: (message: string, options?: NotificationOptions) => string;
+  remove: (id: string) => void;
+  clear: () => void;
+  handleApiResponse: <T>(
+    response: ApiResponse<T>,
+    options?: NotificationOptions
+  ) => void;
+  handleApiError: (
+    error: ApiErrorResponse,
+    formErrorSetter?: FormErrorSetter,
+    fieldMapping?: FormFieldMapping
+  ) => FormNotificationResult;
+}
+
+// Toast notification types for validation errors
+export interface ValidationToast {
+  id: string;
+  message: string;
+  type: "error" | "warning";
+  field?: string;
+  duration?: number;
 }
 
 export interface PaginatedResponse<T> {

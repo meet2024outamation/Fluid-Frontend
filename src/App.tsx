@@ -10,8 +10,10 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { DefaultRedirect } from "./components/DefaultRedirect";
 import { MainLayout } from "./components/layout/MainLayout";
 import { LoginPage } from "./pages/LoginPage";
-import { TenantSelectionPage } from "./components/TenantSelectionPage";
+
 import { ProjectSelectionPage } from "./components/ProjectSelectionPage";
+import { TenantProjectSelectionFlow } from "./components/TenantProjectSelectionFlow";
+import { NoAccessPage } from "./components/NoAccessPage";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import FieldMapping from "./pages/FieldMapping";
 import CreateFieldMapping from "./pages/CreateFieldMapping";
@@ -27,13 +29,8 @@ import RolesManagement from "./pages/RolesManagement";
 import TenantManagement from "./components/TenantManagement";
 import GlobalSchemaManagement from "./components/GlobalSchemaManagement";
 import TenantOrderFlowManagement from "./pages/TenantOrderFlowManagement";
-import PdfViewerDemo from "./components/PdfViewerDemo";
+import ProductOwnerOrderStatusManagement from "./pages/ProductOwnerOrderStatusManagement";
 import "./App.css";
-import {
-  PRODUCT_OWNER_ROLE,
-  TENANT_ADMIN_ROLE,
-  OPERATOR_ROLE,
-} from "./config/roles";
 
 function App() {
   return (
@@ -44,12 +41,21 @@ function App() {
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
 
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <DefaultRedirect />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Tenant/Project Selection Routes */}
             <Route
               path="/tenant-selection"
               element={
                 <ProtectedRoute>
-                  <TenantSelectionPage />
+                  <TenantProjectSelectionFlow />
                 </ProtectedRoute>
               }
             />
@@ -61,9 +67,18 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/login" element={<LoginPage />} />
 
-            {/* Protected Routes */}
+            {/* No Access Route */}
+            <Route
+              path="/no-access"
+              element={
+                <ProtectedRoute>
+                  <NoAccessPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Protected Routes with MainLayout */}
             <Route
               path="/"
               element={
@@ -72,27 +87,31 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Default redirect for authenticated users */}
-              <Route index element={<DefaultRedirect />} />
-
-              {/* Product Owner & Tenant Admin Routes */}
+              {/* Dashboard - Permission-based access */}
               <Route
                 path="dashboard"
                 element={
                   <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
+                    permissions={[
+                      "ViewReports",
+                      "ViewProjects",
+                      "AssignRoles",
+                      "ViewUsers",
+                    ]}
+                    requireAll={false}
                   >
                     <AdminDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Product Owner & Tenant Admin Routes */}
+              {/* Batch Management - Permission-based access */}
               <Route
                 path="batches"
                 element={
                   <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
+                    permissions={["ViewBatches", "CreateOrder"]}
+                    requireAll={false}
                   >
                     <BatchManagement />
                   </ProtectedRoute>
@@ -103,7 +122,8 @@ function App() {
                 path="batches/create"
                 element={
                   <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
+                    permissions={["CreateBatches", "CreateOrder"]}
+                    requireAll={false}
                   >
                     <CreateBatch />
                   </ProtectedRoute>
@@ -113,9 +133,7 @@ function App() {
               <Route
                 path="projects"
                 element={
-                  <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
-                  >
+                  <ProtectedRoute permission="ViewProjects">
                     <ProjectManagement />
                   </ProtectedRoute>
                 }
@@ -124,9 +142,7 @@ function App() {
               <Route
                 path="projects/create"
                 element={
-                  <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
-                  >
+                  <ProtectedRoute permission="CreateProjects">
                     <ProjectForm />
                   </ProtectedRoute>
                 }
@@ -136,7 +152,8 @@ function App() {
                 path="projects/view/:id"
                 element={
                   <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
+                    permissions={["ViewProjects", "ViewReports"]}
+                    requireAll={false}
                   >
                     <ProjectForm isViewMode={true} />
                   </ProtectedRoute>
@@ -146,9 +163,7 @@ function App() {
               <Route
                 path="projects/edit/:id"
                 element={
-                  <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
-                  >
+                  <ProtectedRoute permission="UpdateProjects">
                     <ProjectForm />
                   </ProtectedRoute>
                 }
@@ -157,9 +172,7 @@ function App() {
               <Route
                 path="schemas"
                 element={
-                  <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
-                  >
+                  <ProtectedRoute permission="ViewSchemas">
                     <SchemaManagement />
                   </ProtectedRoute>
                 }
@@ -168,7 +181,7 @@ function App() {
               <Route
                 path="schemas/create"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute permission="CreateSchemas">
                     <SchemaForm />
                   </ProtectedRoute>
                 }
@@ -177,9 +190,7 @@ function App() {
               <Route
                 path="schemas/edit/:id"
                 element={
-                  <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
-                  >
+                  <ProtectedRoute permission="UpdateSchemas">
                     <SchemaForm />
                   </ProtectedRoute>
                 }
@@ -188,9 +199,7 @@ function App() {
               <Route
                 path="field-mapping"
                 element={
-                  <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
-                  >
+                  <ProtectedRoute permission="ViewSchemas">
                     <FieldMapping />
                   </ProtectedRoute>
                 }
@@ -199,9 +208,7 @@ function App() {
               <Route
                 path="field-mapping/create"
                 element={
-                  <ProtectedRoute
-                    requiredRoles={[PRODUCT_OWNER_ROLE, TENANT_ADMIN_ROLE]}
-                  >
+                  <ProtectedRoute permission="CreateSchemas">
                     <CreateFieldMapping />
                   </ProtectedRoute>
                 }
@@ -210,7 +217,7 @@ function App() {
               <Route
                 path="order-flow"
                 element={
-                  <ProtectedRoute requiredRoles={[TENANT_ADMIN_ROLE]}>
+                  <ProtectedRoute permission="ViewOrderFlow">
                     <TenantOrderFlowManagement />
                   </ProtectedRoute>
                 }
@@ -220,7 +227,7 @@ function App() {
               <Route
                 path="users"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute permission="CreateUsers">
                     <UserManagement />
                   </ProtectedRoute>
                 }
@@ -229,7 +236,7 @@ function App() {
               <Route
                 path="roles"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute permission="CreateRoles">
                     <RolesManagement />
                   </ProtectedRoute>
                 }
@@ -238,8 +245,20 @@ function App() {
               <Route
                 path="tenants"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute permission="CreateTenants">
                     <TenantManagement />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="order-status-management"
+                element={
+                  <ProtectedRoute
+                    permissions={["ViewOrderFlow", "ViewReports"]}
+                    requireAll={false}
+                  >
+                    <ProductOwnerOrderStatusManagement />
                   </ProtectedRoute>
                 }
               />
@@ -247,7 +266,7 @@ function App() {
               <Route
                 path="global-schemas"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute permission="ViewGlobalSchemas">
                     <GlobalSchemaManagement />
                   </ProtectedRoute>
                 }
@@ -256,7 +275,7 @@ function App() {
               <Route
                 path="global-schemas/create"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute permission="CreateGlobalSchemas">
                     <SchemaForm isGlobal={true} />
                   </ProtectedRoute>
                 }
@@ -265,7 +284,7 @@ function App() {
               <Route
                 path="global-schemas/edit/:id"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute permission="UpdateGlobalSchemas">
                     <SchemaForm isGlobal={true} />
                   </ProtectedRoute>
                 }
@@ -275,7 +294,10 @@ function App() {
               <Route
                 path="operator"
                 element={
-                  <ProtectedRoute requiredRoles={[OPERATOR_ROLE]}>
+                  <ProtectedRoute
+                    permissions={["ViewOrders", "ProcessOrders"]}
+                    requireAll={false}
+                  >
                     <OperatorDashboard />
                   </ProtectedRoute>
                 }
@@ -284,7 +306,10 @@ function App() {
               <Route
                 path="orders"
                 element={
-                  <ProtectedRoute requiredRoles={[OPERATOR_ROLE]}>
+                  <ProtectedRoute
+                    permissions={["ViewOrders", "ProcessOrders"]}
+                    requireAll={false}
+                  >
                     <div className="p-8 text-center">
                       <h1 className="text-2xl font-bold mb-4">
                         Order Processing
@@ -296,20 +321,42 @@ function App() {
               />
 
               {/* PDF Viewer Demo */}
-              <Route
+              {/* <Route
                 path="pdf-viewer"
                 element={
                   <ProtectedRoute>
                     <PdfViewerDemo />
                   </ProtectedRoute>
                 }
-              />
+              /> */}
+
+              {/* Debug Panel (Development only) */}
+              {import.meta.env.DEV && (
+                <Route
+                  path="debug/auth"
+                  element={
+                    <ProtectedRoute>
+                      <div className="p-8">
+                        <h1 className="text-2xl font-bold mb-4">
+                          Auth Debug Panel
+                        </h1>
+                        <p className="text-gray-600">
+                          Debug panel coming soon...
+                        </p>
+                      </div>
+                    </ProtectedRoute>
+                  }
+                />
+              )}
 
               {/* Settings */}
               <Route
                 path="settings"
                 element={
-                  <ProtectedRoute requiredRoles={[PRODUCT_OWNER_ROLE]}>
+                  <ProtectedRoute
+                    permissions={["ViewTenants", "ViewUsers", "ViewRoles"]}
+                    requireAll={false}
+                  >
                     <div className="p-8 text-center">
                       <h1 className="text-2xl font-bold mb-4">Settings</h1>
                       <p className="text-gray-600">Coming soon...</p>
@@ -319,8 +366,8 @@ function App() {
               />
             </Route>
 
-            {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/login" replace />} />
+            {/* Catch-all redirect to login for unmatched routes */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>
       </TenantSelectionProvider>

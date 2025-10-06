@@ -30,6 +30,7 @@ import {
   type Schema,
   type SchemaListResponse,
 } from "../services/schemaService";
+import type { ApiResponse } from "../types";
 
 const SchemaManagement: React.FC = () => {
   // Handler functions for schema fields (must be defined here to be available in JSX)
@@ -86,7 +87,7 @@ const SchemaManagement: React.FC = () => {
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
   const [showGlobalSchemas, setShowGlobalSchemas] = useState(!isProductOwner);
 
   // Modal states
@@ -95,8 +96,18 @@ const SchemaManagement: React.FC = () => {
     useState<SchemaListResponse | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [schemaToView, setSchemaToView] = useState<Schema | null>(null);
+  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+  const [errorModalContent, setErrorModalContent] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState<number | null>(null);
+
+  const showErrorModal = (title: string, message: string) => {
+    setErrorModalContent({ title, message });
+    setIsErrorModalOpen(true);
+  };
 
   useEffect(() => {
     loadSchemas();
@@ -120,12 +131,19 @@ const SchemaManagement: React.FC = () => {
   const loadSchemas = async () => {
     try {
       setIsLoading(true);
-      setError(null);
-      const data = await schemaService.getAllSchemas();
-      setSchemas(data);
+      const response = await schemaService.getAllSchemas();
+      if (response.success && response.data) {
+        setSchemas(response.data);
+      } else {
+        showErrorModal(
+          "Failed to Load Schemas",
+          response.message || "Failed to load schemas"
+        );
+      }
     } catch (error) {
       console.error("Failed to load schemas:", error);
-      setError(
+      showErrorModal(
+        "Failed to Load Schemas",
         error instanceof Error ? error.message : "Failed to load schemas"
       );
     } finally {
@@ -135,13 +153,19 @@ const SchemaManagement: React.FC = () => {
 
   const loadGlobalSchemas = async () => {
     try {
-      setError(null);
-      // For now, we'll use the same endpoint but in the future this could be a separate endpoint
-      const data = await schemaService.getAllGlobalSchemas();
-      setGlobalSchemas(data);
+      const response = await schemaService.getAllGlobalSchemas();
+      if (response.success && response.data) {
+        setGlobalSchemas(response.data);
+      } else {
+        showErrorModal(
+          "Failed to Load Global Schemas",
+          response.message || "Failed to load global schemas"
+        );
+      }
     } catch (error) {
       console.error("Failed to load global schemas:", error);
-      setError(
+      showErrorModal(
+        "Failed to Load Global Schemas",
         error instanceof Error ? error.message : "Failed to load global schemas"
       );
     }
@@ -158,7 +182,8 @@ const SchemaManagement: React.FC = () => {
       setSchemaToDelete(null);
     } catch (error) {
       console.error("Failed to delete schema:", error);
-      setError(
+      showErrorModal(
+        "Failed to Delete Schema",
         error instanceof Error ? error.message : "Failed to delete schema"
       );
     } finally {
@@ -169,29 +194,38 @@ const SchemaManagement: React.FC = () => {
   const handleToggleStatus = async (schema: SchemaListResponse) => {
     try {
       setIsTogglingStatus(schema.id);
-      const updatedSchema = await schemaService.toggleSchemaStatus(
+      const response = await schemaService.toggleSchemaStatus(
         schema.id,
         !schema.isActive
       );
 
-      // Convert the full Schema response to SchemaListResponse format
-      const updatedListSchema: SchemaListResponse = {
-        id: updatedSchema.id,
-        name: updatedSchema.name,
-        description: updatedSchema.description,
-        version: 1, // Default or get from response
-        isActive: updatedSchema.isActive,
-        schemaFieldCount: updatedSchema.schemaFields?.length || 0,
-        createdAt: updatedSchema.createdAt,
-        createdByName: "Unknown", // Default or get from response
-      };
+      if (response.success && response.data) {
+        const updatedSchema = response.data;
+        // Convert the full Schema response to SchemaListResponse format
+        const updatedListSchema: SchemaListResponse = {
+          id: updatedSchema.id,
+          name: updatedSchema.name,
+          description: updatedSchema.description,
+          version: 1, // Default or get from response
+          isActive: updatedSchema.isActive,
+          schemaFieldCount: updatedSchema.schemaFields?.length || 0,
+          createdAt: updatedSchema.createdAt,
+          createdByName: "Unknown", // Default or get from response
+        };
 
-      setSchemas((prev) =>
-        prev.map((s) => (s.id === schema.id ? updatedListSchema : s))
-      );
+        setSchemas((prev) =>
+          prev.map((s) => (s.id === schema.id ? updatedListSchema : s))
+        );
+      } else {
+        showErrorModal(
+          "Failed to Toggle Schema Status",
+          response.message || "Failed to toggle schema status"
+        );
+      }
     } catch (error) {
       console.error("Failed to toggle schema status:", error);
-      setError(
+      showErrorModal(
+        "Failed to Toggle Schema Status",
         error instanceof Error
           ? error.message
           : "Failed to update schema status"
@@ -206,9 +240,19 @@ const SchemaManagement: React.FC = () => {
       setIsLoading(true);
 
       // First get the full schema details from the global schema
-      const fullGlobalSchema = await schemaService.getGlobalSchemaById(
+      const globalResponse = await schemaService.getGlobalSchemaById(
         globalSchema.id
       );
+
+      if (!globalResponse.success || !globalResponse.data) {
+        showErrorModal(
+          "Failed to Load Global Schema",
+          globalResponse.message || "Failed to load global schema"
+        );
+        return;
+      }
+
+      const fullGlobalSchema = globalResponse.data;
 
       // Create a new schema request based on the global schema
       const cloneRequest = {
@@ -226,7 +270,17 @@ const SchemaManagement: React.FC = () => {
       };
 
       // Create the cloned schema as a tenant schema
-      const newSchema = await schemaService.createSchema(cloneRequest);
+      const createResponse = await schemaService.createSchema(cloneRequest);
+
+      if (!createResponse.success || !createResponse.data) {
+        showErrorModal(
+          "Failed to Create Cloned Schema",
+          createResponse.message || "Failed to create cloned schema"
+        );
+        return;
+      }
+
+      const newSchema = createResponse.data;
 
       // Add to the schemas list and switch to "My Schemas" view
       setSchemas((prev) => [
@@ -247,7 +301,8 @@ const SchemaManagement: React.FC = () => {
       setShowGlobalSchemas(false);
     } catch (error) {
       console.error("Failed to clone schema:", error);
-      setError(
+      showErrorModal(
+        "Failed to Clone Schema",
         error instanceof Error ? error.message : "Failed to clone schema"
       );
     } finally {
@@ -263,17 +318,28 @@ const SchemaManagement: React.FC = () => {
   const openViewModal = async (schema: SchemaListResponse) => {
     try {
       // Use global schema API if viewing global schemas, else use tenant schema API
-      let fullSchema: Schema;
+      let response: ApiResponse<Schema>;
       if (showGlobalSchemas && !isProductOwner) {
-        fullSchema = await schemaService.getGlobalSchemaById(schema.id);
+        response = await schemaService.getGlobalSchemaById(schema.id);
       } else {
-        fullSchema = await schemaService.getSchemaById(schema.id);
+        response = await schemaService.getSchemaById(schema.id);
       }
-      setSchemaToView(fullSchema);
-      setShowViewModal(true);
+
+      if (response.success && response.data) {
+        setSchemaToView(response.data);
+        setShowViewModal(true);
+      } else {
+        showErrorModal(
+          "Failed to Load Schema Details",
+          response.message || "Failed to load schema details"
+        );
+      }
     } catch (error) {
       console.error("Failed to fetch schema details:", error);
-      setError("Failed to load schema details");
+      showErrorModal(
+        "Failed to Load Schema Details",
+        "Failed to load schema details"
+      );
     }
   };
 
@@ -424,18 +490,7 @@ const SchemaManagement: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="flex items-start">
-              <AlertCircle className="h-5 w-5 text-red-500 mr-3 mt-0.5" />
-              <div>
-                <h4 className="font-medium text-red-800">Error</h4>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Error messages now shown via modal */}
 
         {/* Schemas List */}
         <Card>
@@ -873,6 +928,31 @@ const SchemaManagement: React.FC = () => {
               </div>
             </div>
           )}
+        </Modal>
+
+        {/* Error Modal */}
+        <Modal
+          isOpen={isErrorModalOpen}
+          onClose={() => {
+            setIsErrorModalOpen(false);
+            setErrorModalContent(null);
+          }}
+          title={errorModalContent?.title || "Error"}
+        >
+          <div className="text-center p-6">
+            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
+            <p className="text-gray-600 mb-4">{errorModalContent?.message}</p>
+            <Button
+              onClick={() => {
+                setIsErrorModalOpen(false);
+                setErrorModalContent(null);
+              }}
+              className="mt-4"
+            >
+              OK
+            </Button>
+          </div>
         </Modal>
       </div>
     </div>

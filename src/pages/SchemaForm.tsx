@@ -30,6 +30,7 @@ import {
   DATA_TYPES,
   type DataType,
 } from "../services/schemaService";
+import { useFormValidation } from "../hooks/useFormValidation";
 
 // Helper function to normalize data types
 const normalizeDataType = (dataType: string): DataType => {
@@ -77,8 +78,23 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalContent, setErrorModalContent] = useState<{
+    title: string;
+    message: string;
+    details?: string[];
+  } | null>(null);
+
+  // Form validation with centralized notifications
+  const formValidation = useFormValidation({
+    fieldMapping: {
+      Schema: "name",
+      Name: "name",
+      Description: "description",
+      SchemaFields: "fields",
+    },
+  });
 
   useEffect(() => {
     if (isEditMode && schemaId && schemaId > 0) {
@@ -91,9 +107,17 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
 
     try {
       setIsLoading(true);
-      const schema = isGlobal
+      const schemaResponse = isGlobal
         ? await schemaService.getGlobalSchemaById(schemaId)
         : await schemaService.getSchemaById(schemaId);
+
+      // Handle API response format
+      if (!schemaResponse.success || !schemaResponse.data) {
+        formValidation.handleFormApiError(schemaResponse);
+        return;
+      }
+
+      const schema = schemaResponse.data;
       setOriginalSchema(schema);
 
       setFormData({
@@ -125,9 +149,7 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
       setSchemaFields(editableFields);
     } catch (error) {
       console.error("Failed to load schema:", error);
-      setSubmitError(
-        error instanceof Error ? error.message : "Failed to load schema"
-      );
+      // Error handled by loading state"
     } finally {
       setIsLoading(false);
     }
@@ -276,7 +298,7 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setValidationErrors([]);
-    setSubmitError(null);
+    formValidation.clearAllErrors();
   };
 
   const validateForm = (): boolean => {
@@ -327,7 +349,6 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
     }
 
     setIsSubmitting(true);
-    setSubmitError(null);
 
     try {
       if (isCreateMode) {
@@ -344,9 +365,32 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           })),
         };
 
-        await (isGlobal
+        const response = await (isGlobal
           ? schemaService.createGlobalSchema(request)
           : schemaService.createSchema(request));
+
+        if (!response.success) {
+          // Show error modal for API response errors
+          const errorDetails: string[] = [];
+          if (
+            response.validationErrors &&
+            Array.isArray(response.validationErrors)
+          ) {
+            errorDetails.push(
+              ...response.validationErrors.map((ve: any) => ve.errorMessage)
+            );
+          }
+
+          setErrorModalContent({
+            title: `Failed to ${isCreateMode ? "Create" : "Update"} Schema`,
+            message:
+              response.message ||
+              "An error occurred while processing your request.",
+            details: errorDetails.length > 0 ? errorDetails : undefined,
+          });
+          setShowErrorModal(true);
+          return;
+        }
       } else {
         const request: UpdateSchemaRequest = {
           id: schemaId!,
@@ -365,11 +409,35 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           })),
         };
 
-        await (isGlobal
+        const response = await (isGlobal
           ? schemaService.updateGlobalSchema(request)
           : schemaService.updateSchema(request));
+
+        if (!response.success) {
+          // Show error modal for API response errors
+          const errorDetails: string[] = [];
+          if (
+            response.validationErrors &&
+            Array.isArray(response.validationErrors)
+          ) {
+            errorDetails.push(
+              ...response.validationErrors.map((ve: any) => ve.errorMessage)
+            );
+          }
+
+          setErrorModalContent({
+            title: `Failed to ${isCreateMode ? "Create" : "Update"} Schema`,
+            message:
+              response.message ||
+              "An error occurred while processing your request.",
+            details: errorDetails.length > 0 ? errorDetails : undefined,
+          });
+          setShowErrorModal(true);
+          return;
+        }
       }
 
+      // Show success modal
       setShowSuccessModal(true);
 
       // Redirect after a brief delay
@@ -381,11 +449,39 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
         `Failed to ${isCreateMode ? "create" : "update"} schema:`,
         error
       );
-      setSubmitError(
-        error instanceof Error
-          ? error.message
-          : `Failed to ${isCreateMode ? "create" : "update"} schema`
-      );
+
+      // Clear previous errors
+      formValidation.clearAllErrors();
+
+      // Prepare error modal content
+      let errorTitle = `Failed to ${isCreateMode ? "Create" : "Update"} Schema`;
+      let errorMessage = "An unexpected error occurred. Please try again.";
+      let errorDetails: string[] = [];
+
+      if (error && typeof error === "object" && "validationErrors" in error) {
+        const apiError = error as any;
+        errorMessage = apiError.message || errorMessage;
+
+        // Collect validation error details
+        if (
+          apiError.validationErrors &&
+          Array.isArray(apiError.validationErrors)
+        ) {
+          errorDetails = apiError.validationErrors.map(
+            (ve: any) => ve.errorMessage
+          );
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      // Show error modal instead of inline error
+      setErrorModalContent({
+        title: errorTitle,
+        message: errorMessage,
+        details: errorDetails.length > 0 ? errorDetails : undefined,
+      });
+      setShowErrorModal(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -471,7 +567,13 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
+                onChange={(e) => {
+                  handleInputChange("name", e.target.value);
+                  // Clear validation error when user types
+                  if (formValidation.hasError("name")) {
+                    formValidation.clearFieldError("name");
+                  }
+                }}
                 className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., Invoice Schema, Customer Data Schema"
                 maxLength={100}
@@ -484,14 +586,19 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
               </label>
               <textarea
                 value={formData.description}
-                onChange={(e) =>
-                  handleInputChange("description", e.target.value)
-                }
+                onChange={(e) => {
+                  handleInputChange("description", e.target.value);
+                  // Clear validation error when user types
+                  if (formValidation.hasError("description")) {
+                    formValidation.clearFieldError("description");
+                  }
+                }}
                 className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Describe what this schema is used for..."
                 rows={3}
                 maxLength={500}
               />
+
               <p className="text-xs text-gray-500 mt-1">
                 {formData.description.length}/500 characters
               </p>
@@ -938,18 +1045,7 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
               </div>
             )}
 
-            {/* Submit Error */}
-            {submitError && (
-              <div className="mt-6 bg-red-50 border border-red-200 rounded-md p-4">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 text-red-500 mr-3" />
-                  <div>
-                    <h4 className="font-medium text-red-800">Error</h4>
-                    <p className="text-sm text-red-600 mt-1">{submitError}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Error messages are now shown in modal */}
 
             {/* Submit Button */}
             <div className="mt-6 pt-4 border-t">
@@ -996,6 +1092,45 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           <p className="text-sm text-gray-500">
             Redirecting to {isGlobal ? "global " : ""}schema management...
           </p>
+        </div>
+      </Modal>
+
+      {/* Error Modal */}
+      <Modal
+        isOpen={showErrorModal}
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorModalContent(null);
+        }}
+        title={errorModalContent?.title || "Error"}
+      >
+        <div className="text-center p-6">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
+          <p className="text-gray-600 mb-4">{errorModalContent?.message}</p>
+          {errorModalContent?.details &&
+            errorModalContent.details.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4 text-left">
+                <h4 className="font-medium text-red-800 mb-2">Details:</h4>
+                <ul className="text-sm text-red-600 space-y-1">
+                  {errorModalContent.details.map((detail, index) => (
+                    <li key={index} className="flex items-start">
+                      <span className="inline-block w-1 h-1 bg-red-400 rounded-full mt-2 mr-2 flex-shrink-0"></span>
+                      <span>{detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          <Button
+            onClick={() => {
+              setShowErrorModal(false);
+              setErrorModalContent(null);
+            }}
+            className="mt-4"
+          >
+            OK
+          </Button>
         </div>
       </Modal>
     </div>

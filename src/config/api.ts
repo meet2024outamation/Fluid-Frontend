@@ -1,4 +1,10 @@
 import { keysToCamelCase } from "../utils/camelCaseKeys";
+import { notificationService } from "../services/notificationService";
+import type {
+  ApiResponse,
+  ApiErrorResponse,
+  ApiSuccessResponse,
+} from "../types";
 // API Configuration
 export const API_CONFIG = {
   // Use environment variable or fall back to relative URLs for development
@@ -30,6 +36,40 @@ export const API_CONFIG = {
   },
 } as const;
 
+// Standardized API Error class
+export class ApiError extends Error {
+  public status: number;
+  public data: ApiErrorResponse;
+  public response: ApiResponse;
+
+  constructor(message: string, status: number, response: ApiResponse) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = {
+      success: false,
+      message: response.message,
+      error: response.error,
+      errors: response.errors,
+      validationErrors: response.validationErrors,
+      status,
+    };
+    this.response = response;
+  }
+
+  // Check if this is a validation error
+  isValidationError(): boolean {
+    return Boolean(
+      this.status === 400 &&
+        ((this.data?.validationErrors &&
+          this.data.validationErrors.length > 0) ||
+          (this.data?.errors &&
+            typeof this.data.errors === "object" &&
+            Object.keys(this.data.errors).length > 0))
+    );
+  }
+}
+
 // Helper function to build full API URLs
 export const buildApiUrl = (endpoint: string): string => {
   const baseUrl = API_CONFIG.BASE_URL;
@@ -46,27 +86,40 @@ export const buildApiUrl = (endpoint: string): string => {
   return `${cleanBaseUrl}/${cleanEndpoint}`;
 };
 
-// Helper function to get authentication headers
-export const getAuthHeaders = (): Record<string, string> => {
+// Helper function to get authentication headers (simplified; interceptor removed)
+export const getAuthHeaders = (options?: {
+  includeTenant?: boolean;
+  includeProject?: boolean;
+  overrideTenantIdentifier?: string | null;
+  overrideProjectId?: string | number | null;
+  omitAuth?: boolean; // allow calls without bearer (e.g., public endpoints if any)
+}): Record<string, string> => {
   const token =
     localStorage.getItem("msal.access.token") ||
     sessionStorage.getItem("msal.access.token");
 
-  const selectedTenantIdentifier = localStorage.getItem(
-    "selectedTenantIdentifier"
-  );
+  const selectedTenantIdentifier =
+    options?.overrideTenantIdentifier ??
+    localStorage.getItem("selectedTenantIdentifier");
+
+  const selectedProjectId =
+    options?.overrideProjectId?.toString() ??
+    localStorage.getItem("selectedProjectId");
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
-  if (token) {
+  if (!options?.omitAuth && token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Add tenant header if a tenant identifier is selected (using identifier value but same header name)
-  if (selectedTenantIdentifier) {
-    headers["X-Tenant-Id"] = selectedTenantIdentifier;
+  if (options?.includeTenant !== false && selectedTenantIdentifier) {
+    headers["x-tenant-id"] = selectedTenantIdentifier;
+  }
+
+  if (options?.includeProject === true && selectedProjectId) {
+    headers["x-project-id"] = selectedProjectId;
   }
 
   return headers;
@@ -75,14 +128,17 @@ export const getAuthHeaders = (): Record<string, string> => {
 // Helper function for authenticated API calls
 export const apiRequest = async (
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & {
+    includeTenant?: boolean;
+    includeProject?: boolean;
+    overrideTenantIdentifier?: string | null;
+    overrideProjectId?: string | number | null;
+  } = {}
 ): Promise<Response> => {
+  // Backward-compatible wrapper; uses direct fetch now
   const url = buildApiUrl(endpoint);
 
-  const authHeaders = getAuthHeaders();
-
   let body = options.body;
-  // Only transform for POST, PUT, PATCH with JSON body
   if (
     body &&
     typeof body === "string" &&
@@ -93,28 +149,241 @@ export const apiRequest = async (
     try {
       const parsed = JSON.parse(body);
       body = JSON.stringify(keysToCamelCase(parsed));
-    } catch (e) {
-      // If not JSON, leave as is
+    } catch {
+      /* ignore parse error */
     }
   }
 
-  const config: RequestInit = {
-    ...options,
-    body,
+  const {
+    includeTenant,
+    includeProject,
+    overrideTenantIdentifier,
+    overrideProjectId,
+    headers,
+    ...rest
+  } = options as any;
+  const authHeaders = getAuthHeaders({
+    includeTenant,
+    includeProject,
+    overrideTenantIdentifier,
+    overrideProjectId,
+  });
+
+  return fetch(url, {
+    ...rest,
     headers: {
       ...authHeaders,
-      ...options.headers,
+      ...(headers || {}),
     },
-  };
+    body,
+  });
+};
 
-  const response = await fetch(url, config);
+// Enhanced API request that handles JSON responses and validation errors
+export const apiRequestWithValidation = async (
+  endpoint: string,
+  options: RequestInit = {},
+  formErrorSetter?: (
+    field: string,
+    error: { type: string; message: string }
+  ) => void,
+  fieldMapping?: Record<string, string>
+): Promise<any> => {
+  const response = await apiRequest(endpoint, options as any);
 
-  // Handle authentication errors
-  if (response.status === 401) {
-    // Token expired or invalid, redirect to login
-    window.location.href = "/login";
-    throw new Error("Authentication required");
+  // Handle response content
+  let responseData: any;
+  const contentType = response.headers.get("content-type");
+
+  try {
+    if (contentType && contentType.includes("application/json")) {
+      responseData = await response.json();
+    } else {
+      responseData = await response.text();
+    }
+  } catch (error) {
+    responseData = null;
   }
 
-  return response;
+  // Handle successful responses
+  if (response.ok) {
+    return responseData;
+  }
+
+  // Create API error with response details
+  const apiError = new ApiError(
+    responseData?.message ||
+      response.statusText ||
+      `API call failed with status ${response.status}`,
+    response.status,
+    responseData
+  );
+
+  // Handle 400 status with validation errors automatically
+  if (response.status === 400 && responseData) {
+    const errorResponse: ApiErrorResponse = {
+      success: false,
+      message: responseData.message,
+      errors: responseData.errors,
+      validationErrors: responseData.validationErrors,
+      status: response.status,
+    };
+
+    const fieldMap =
+      fieldMapping || notificationService.createDefaultFieldMapping();
+    notificationService.handleApiError(
+      errorResponse,
+      formErrorSetter,
+      fieldMap
+    );
+  }
+
+  throw apiError;
+};
+
+// Convenience function for JSON API calls with validation error handling
+export const apiJsonRequest = async (
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<any> => {
+  return apiRequestWithValidation(endpoint, options);
+};
+
+// Handle API response with notifications (for non-throwing scenarios)
+export const handleApiResponse = <T>(response: ApiResponse<T>): T | null => {
+  notificationService.handleApiResponse(response);
+
+  if (response.success) {
+    return response.data || null;
+  }
+
+  return null;
+};
+
+// Create standardized success response
+export const createSuccessResponse = <T>(
+  data?: T,
+  message?: string
+): ApiSuccessResponse<T> => {
+  return {
+    success: true,
+    data,
+    message,
+  };
+};
+
+// Create standardized error response
+export const createErrorResponse = (
+  message: string,
+  errors?: any,
+  validationErrors?: any[],
+  status = 400
+): ApiErrorResponse => {
+  return {
+    success: false,
+    message,
+    errors,
+    validationErrors,
+    status,
+  };
+};
+
+// Helper functions for role detection based on accessible tenants data
+export const getUserRoleFromAccessibleTenants = (): string | null => {
+  try {
+    // Try to get role from stored accessible tenants data
+    const accessibleTenantsData = localStorage.getItem("accessibleTenants");
+    if (!accessibleTenantsData) {
+      // Fallback to checking current user context
+      return null;
+    }
+
+    const parsedData = JSON.parse(accessibleTenantsData);
+
+    // Priority order: Product Owner > Tenant Admin > Other
+    if (parsedData.isProductOwner === true) {
+      return "Product Owner";
+    }
+
+    if (
+      parsedData.tenantAdminIds &&
+      Array.isArray(parsedData.tenantAdminIds) &&
+      parsedData.tenantAdminIds.length > 0
+    ) {
+      return "Tenant Admin";
+    }
+
+    // Default to other role (Keying, Member, etc.)
+    return "Other";
+  } catch (error) {
+    console.error(
+      "Error determining user role from accessible tenants:",
+      error
+    );
+    return null;
+  }
+};
+
+// Get headers for ME API endpoint based on user role and context requirements
+// Role-based header rules:
+// - Product Owner: No tenant/project headers (has global access)
+// - Tenant Admin: Only x-tenant-id header (scoped to tenant)
+// - Other roles (Keying, etc.): Both x-tenant-id and x-project-id headers (scoped to project)
+export const getMeApiHeaders = (): Record<string, string> => {
+  const userRole = getUserRoleFromAccessibleTenants();
+
+  switch (userRole) {
+    case "Product Owner":
+      // Product Owner: No tenant/project headers required - has global access
+      return getAuthHeaders({ includeTenant: false, includeProject: false });
+
+    case "Tenant Admin":
+      // Tenant Admin: Only x-tenant-id header - scoped to tenant level
+      return getAuthHeaders({ includeTenant: true, includeProject: false });
+
+    default:
+      // Other roles (Keying, Member, etc.): Both headers - scoped to project level
+      return getAuthHeaders({ includeTenant: true, includeProject: true });
+  }
+};
+
+// Specialized API request for /me endpoint with role-aware headers and duplicate prevention
+// This function automatically determines the user's role and applies the appropriate headers:
+// - Detects user role from accessible tenants data
+// - Applies role-specific header rules for context resolution
+// - Prevents duplicate calls to /me endpoint
+// - Enables backend to return correct permissions and context information
+export const meApiRequest = async (options?: {
+  // pass explicit context overrides if needed (for freshly selected tenant/project)
+  tenantIdentifier?: string | null;
+  projectId?: string | number | null;
+}): Promise<Response> => {
+  const meEndpoint = "/api/users/me";
+
+  const userRole = getUserRoleFromAccessibleTenants();
+
+  // Determine which context headers to include based on role
+  let includeTenant = true;
+  let includeProject = true;
+  switch (userRole) {
+    case "Product Owner":
+      includeTenant = false;
+      includeProject = false;
+      break;
+    case "Tenant Admin":
+      includeTenant = true;
+      includeProject = false;
+      break;
+    default:
+      includeTenant = true;
+      includeProject = true;
+  }
+
+  return apiRequest(meEndpoint, {
+    method: "GET",
+    includeTenant,
+    includeProject,
+    overrideTenantIdentifier: options?.tenantIdentifier ?? null,
+    overrideProjectId: options?.projectId ?? null,
+  });
 };

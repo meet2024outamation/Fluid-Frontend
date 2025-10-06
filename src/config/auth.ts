@@ -45,6 +45,7 @@ export const userApiEndpoints = {
   getUserById: (id: number) => `/api/users/${id}`, // Get user by ID
   createUser: "/api/users", // Create new user
   getAccessibleTenants: "/api/users/accessible-tenants", // Get accessible tenants
+  me: "/api/users/me", // Me endpoint for user permissions and context
   authTest: "/api/auth/test", // Auth test endpoint
   refreshToken: "/api/auth/refresh",
 };
