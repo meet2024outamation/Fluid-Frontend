@@ -9,7 +9,6 @@ export const DefaultRedirect: React.FC = () => {
   const {
     isProductOwner,
     isTenantAdmin,
-    needsTenantSelection,
     needsProjectSelection,
     selectedTenantIdentifier,
     selectedProjectId,

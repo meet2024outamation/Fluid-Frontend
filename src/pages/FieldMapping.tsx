@@ -172,16 +172,15 @@ const FieldMappingPage: React.FC = () => {
       setIsSaving(true);
       setSaveError(null);
 
-      // Group field mappings by schema
+      // Build mapping collection including schemas with zero mappings
       const mappingsBySchema: { [schemaId: number]: FieldMappingItem[] } = {};
 
       Object.entries(fieldMappings).forEach(([key, value]) => {
+        const [schemaId, fieldId] = key.split("_").map(Number);
+        if (!mappingsBySchema[schemaId]) {
+          mappingsBySchema[schemaId] = [];
+        }
         if (value.trim()) {
-          // Only save non-empty mappings
-          const [schemaId, fieldId] = key.split("_").map(Number);
-          if (!mappingsBySchema[schemaId]) {
-            mappingsBySchema[schemaId] = [];
-          }
           mappingsBySchema[schemaId].push({
             schemaFieldId: fieldId,
             inputField: value.trim(),
@@ -189,15 +188,21 @@ const FieldMappingPage: React.FC = () => {
         }
       });
 
-      // Create bulk field mappings for each schema
+      // Ensure every loaded schema appears, even if user cleared all mappings
+      projectSchemasWithFields.forEach((schema) => {
+        if (!mappingsBySchema[schema.id]) {
+          mappingsBySchema[schema.id] = []; // explicit empty list
+        }
+      });
+
+      // Prepare promises: send a call per schema (including empty arrays)
       const savePromises = Object.entries(mappingsBySchema).map(
-        ([schemaId, fieldMappings]) => {
+        ([schemaId, schemaFieldMappings]) => {
           const request: CreateBulkFieldMappingRequest = {
             projectId: selectedProject.id,
             schemaId: Number(schemaId),
-            fieldMappings,
+            fieldMappings: schemaFieldMappings, // may be empty -> backend should clear
           };
-          // Saving field mapping request
           return fieldMappingService.createBulkFieldMapping(request);
         }
       );

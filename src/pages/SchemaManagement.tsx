@@ -29,56 +29,12 @@ import {
   schemaService,
   type Schema,
   type SchemaListResponse,
+  type SectionDto,
+  type SchemaField,
 } from "../services/schemaService";
 import type { ApiResponse } from "../types";
 
 const SchemaManagement: React.FC = () => {
-  // Handler functions for schema fields (must be defined here to be available in JSX)
-  const handleAddFieldAfter = (fieldId: number) => {
-    setSchemaToView((prev) => {
-      if (!prev) return prev;
-      const idx = prev.schemaFields.findIndex((f: any) => f.id === fieldId);
-      if (idx === -1) return prev;
-      const newField = {
-        id: Date.now(),
-        fieldName: "",
-        fieldLabel: "",
-        dataType: "string",
-        format: "",
-        isRequired: false,
-        displayOrder: idx + 2,
-        MinLength: undefined,
-        MaxLength: undefined,
-        Precision: undefined,
-      };
-      const newFields = [
-        ...prev.schemaFields.slice(0, idx + 1),
-        newField,
-        ...prev.schemaFields.slice(idx + 1),
-      ].map((f: any, i: number) => ({ ...f, displayOrder: i + 1 }));
-      return { ...prev, schemaFields: newFields };
-    });
-  };
-
-  const handleDeleteField = (fieldId: number) => {
-    setSchemaToView((prev) => {
-      if (!prev) return prev;
-      const newFields = prev.schemaFields
-        .filter((f: any) => f.id !== fieldId)
-        .map((f: any, i: number) => ({ ...f, displayOrder: i + 1 }));
-      return { ...prev, schemaFields: newFields };
-    });
-  };
-
-  const handleFieldChange = (fieldId: number, key: string, value: any) => {
-    setSchemaToView((prev) => {
-      if (!prev) return prev;
-      const newFields = prev.schemaFields.map((f: any) =>
-        f.id === fieldId ? { ...f, [key]: value } : f
-      );
-      return { ...prev, schemaFields: newFields };
-    });
-  };
   const { isProductOwner } = useTenantSelection();
   const [schemas, setSchemas] = useState<SchemaListResponse[]>([]);
   const [globalSchemas, setGlobalSchemas] = useState<SchemaListResponse[]>([]);
@@ -96,6 +52,18 @@ const SchemaManagement: React.FC = () => {
     useState<SchemaListResponse | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [schemaToView, setSchemaToView] = useState<Schema | null>(null);
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({});
+  const [showSectionModal, setShowSectionModal] = useState(false);
+  const [editingSection, setEditingSection] = useState<SectionDto | null>(null);
+  const [sectionForm, setSectionForm] = useState<{
+    name: string;
+    description?: string;
+    isActive: boolean;
+    displayOrder?: number | null;
+  }>({ name: "", description: "", isActive: true, displayOrder: undefined });
+  const [sectionSaving, setSectionSaving] = useState(false);
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
   const [errorModalContent, setErrorModalContent] = useState<{
     title: string;
@@ -328,6 +296,10 @@ const SchemaManagement: React.FC = () => {
       if (response.success && response.data) {
         setSchemaToView(response.data);
         setShowViewModal(true);
+        // initialize section expansion
+        const init: Record<string, boolean> = {};
+        response.data.sections?.forEach((sec) => (init[sec.id] = true));
+        setExpandedSections(init);
       } else {
         showErrorModal(
           "Failed to Load Schema Details",
@@ -339,6 +311,201 @@ const SchemaManagement: React.FC = () => {
       showErrorModal(
         "Failed to Load Schema Details",
         "Failed to load schema details"
+      );
+    }
+  };
+
+  const toggleSection = (id: string) => {
+    setExpandedSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const openCreateSection = () => {
+    if (!schemaToView) return;
+    setEditingSection(null);
+    setSectionForm({
+      name: "",
+      description: "",
+      isActive: true,
+      displayOrder: (schemaToView.sections?.length || 0) + 1,
+    });
+    setShowSectionModal(true);
+  };
+
+  const openEditSection = (section: SectionDto) => {
+    setEditingSection(section);
+    setSectionForm({
+      name: section.name,
+      description: section.description || "",
+      isActive: section.isActive ?? true,
+      displayOrder: section.displayOrder ?? undefined,
+    });
+    setShowSectionModal(true);
+  };
+
+  const refreshSchemaDetails = async () => {
+    if (!schemaToView) return;
+    const res =
+      showGlobalSchemas && !isProductOwner
+        ? await schemaService.getGlobalSchemaById(schemaToView.id)
+        : await schemaService.getSchemaById(schemaToView.id);
+    if (res.success && res.data) {
+      setSchemaToView(res.data);
+    }
+  };
+
+  const handleSaveSection = async () => {
+    if (!schemaToView) return;
+    try {
+      setSectionSaving(true);
+      if (editingSection) {
+        const res =
+          showGlobalSchemas && !isProductOwner
+            ? await schemaService.updateSection(
+                schemaToView.id,
+                String(editingSection.id),
+                {
+                  name: sectionForm.name,
+                  description: sectionForm.description,
+                  displayOrder: sectionForm.displayOrder,
+                  isActive: sectionForm.isActive,
+                }
+              )
+            : await schemaService.updateTenantSection(
+                schemaToView.id,
+                String(editingSection.id),
+                {
+                  name: sectionForm.name,
+                  description: sectionForm.description,
+                  displayOrder: sectionForm.displayOrder,
+                  isActive: sectionForm.isActive,
+                }
+              );
+        if (res.success && res.data) {
+          const updatedSection = res.data;
+          setSchemaToView((prev) => {
+            if (!prev) return prev;
+            const existingSections = prev.sections || [];
+            return {
+              ...prev,
+              sections: existingSections.map((s) =>
+                s.id === updatedSection.id ? updatedSection : s
+              ),
+            };
+          });
+        } else {
+          showErrorModal(
+            "Failed to Update Section",
+            res.message || "Update failed"
+          );
+        }
+      } else {
+        const res =
+          showGlobalSchemas && !isProductOwner
+            ? await schemaService.createSection(schemaToView.id, {
+                name: sectionForm.name,
+                description: sectionForm.description,
+                displayOrder: sectionForm.displayOrder,
+                isActive: sectionForm.isActive,
+              })
+            : await schemaService.createTenantSection(schemaToView.id, {
+                name: sectionForm.name,
+                description: sectionForm.description,
+                displayOrder: sectionForm.displayOrder,
+                isActive: sectionForm.isActive,
+              });
+        if (res.success && res.data) {
+          const newSection = res.data;
+          setSchemaToView((prev) => {
+            if (!prev) return prev;
+            const existingSections = prev.sections || [];
+            return { ...prev, sections: [...existingSections, newSection] };
+          });
+          setExpandedSections((prev) => ({ ...prev, [newSection.id]: true }));
+        } else {
+          showErrorModal(
+            "Failed to Create Section",
+            res.message || "Creation failed"
+          );
+        }
+      }
+      setShowSectionModal(false);
+      await refreshSchemaDetails();
+    } catch (err) {
+      console.error("Section save failed", err);
+      showErrorModal(
+        "Section Save Failed",
+        err instanceof Error ? err.message : "Failed to save section"
+      );
+    } finally {
+      setSectionSaving(false);
+    }
+  };
+
+  const handleDeleteSection = async (section: SectionDto) => {
+    if (
+      !confirm(
+        `Delete section "${section.name}"? Its fields will become unassigned.`
+      )
+    )
+      return;
+    try {
+      const res =
+        showGlobalSchemas && !isProductOwner
+          ? await schemaService.deleteSection(
+              schemaToView!.id,
+              String(section.id)
+            )
+          : await schemaService.deleteTenantSection(
+              schemaToView!.id,
+              String(section.id)
+            );
+      if (res.success) {
+        setSchemaToView((prev) =>
+          prev
+            ? {
+                ...prev,
+                sections: prev.sections?.filter((s) => s.id !== section.id),
+              }
+            : prev
+        );
+        await refreshSchemaDetails();
+      } else {
+        showErrorModal(
+          "Failed to Delete Section",
+          res.message || "Delete failed"
+        );
+      }
+    } catch (err) {
+      console.error("Delete section failed", err);
+      showErrorModal(
+        "Delete Section Failed",
+        err instanceof Error ? err.message : "Failed to delete section"
+      );
+    }
+  };
+
+  const handleAssignFieldSection = async (
+    field: SchemaField,
+    sectionId: string | null
+  ) => {
+    try {
+      const res =
+        showGlobalSchemas && !isProductOwner
+          ? await schemaService.assignFieldToSection(field.id, sectionId)
+          : await schemaService.assignTenantFieldToSection(field.id, sectionId);
+      if (res.success) {
+        await refreshSchemaDetails();
+      } else {
+        showErrorModal(
+          "Failed to Assign Field",
+          res.message || "Assignment failed"
+        );
+      }
+    } catch (err) {
+      console.error("Assign field failed", err);
+      showErrorModal(
+        "Assign Field Failed",
+        err instanceof Error ? err.message : "Failed to assign field"
       );
     }
   };
@@ -705,7 +872,6 @@ const SchemaManagement: React.FC = () => {
         >
           {schemaToView && (
             <div className="space-y-6">
-              {/* Schema Basic Info */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -748,187 +914,314 @@ const SchemaManagement: React.FC = () => {
                 </div>
               </div>
 
-              {/* Schema Fields */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
                   <h4 className="text-lg font-semibold text-gray-900">
-                    Schema Fields
+                    Sections & Fields
                   </h4>
-                  <span className="text-sm text-gray-500">
-                    {schemaToView.schemaFields?.length || 0} fields
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={openCreateSection}
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Section
+                    </Button>
+                  </div>
                 </div>
 
-                {schemaToView.schemaFields &&
-                schemaToView.schemaFields.length > 0 ? (
-                  <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-lg">
-                    <div className="space-y-0 divide-y divide-gray-100">
-                      {schemaService
-                        .sortSchemaFields(schemaToView.schemaFields)
-                        .map((field) => (
-                          <div
-                            key={field.id}
-                            className="p-4 hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-3">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full">
-                                    {field.displayOrder}
-                                  </span>
-                                  <Button
-                                    size="icon"
-                                    variant="outline"
-                                    className="ml-2"
-                                    title="Add Field After"
-                                    onClick={() =>
-                                      handleAddFieldAfter(field.id)
-                                    }
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </Button>
-                                  <div>
-                                    <h5 className="font-semibold text-gray-900 text-lg">
-                                      {field.fieldLabel}
-                                      {field.isRequired && (
-                                        <span className="text-red-500 ml-1">
-                                          *
-                                        </span>
-                                      )}
-                                    </h5>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <span className="text-gray-500 text-sm font-medium">
-                                        Field Name:
-                                      </span>
-                                      <span className="font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-sm">
-                                        {field.fieldName}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    size="icon"
-                                    variant="destructive"
-                                    className="ml-2"
-                                    title="Delete Field"
-                                    onClick={() => handleDeleteField(field.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                                // Handler functions for schema fields
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-11">
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">
-                                      Format (Optional)
-                                    </label>
-                                    <input
-                                      type="text"
-                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
-                                      value={field.format || ""}
-                                      onChange={(e) =>
-                                        handleFieldChange(
-                                          field.id,
-                                          "format",
-                                          e.target.value
-                                        )
-                                      }
-                                      placeholder="e.g., dd/MM/yyyy, ###-##-####"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">
-                                      Min Length
-                                    </label>
-                                    <input
-                                      type="number"
-                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
-                                      value={field.MinLength ?? ""}
-                                      onChange={(e) =>
-                                        handleFieldChange(
-                                          field.id,
-                                          "MinLength",
-                                          e.target.value
-                                            ? parseInt(e.target.value)
-                                            : undefined
-                                        )
-                                      }
-                                      placeholder="Min Length"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">
-                                      Max Length
-                                    </label>
-                                    <input
-                                      type="number"
-                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
-                                      value={field.MaxLength ?? ""}
-                                      onChange={(e) =>
-                                        handleFieldChange(
-                                          field.id,
-                                          "MaxLength",
-                                          e.target.value
-                                            ? parseInt(e.target.value)
-                                            : undefined
-                                        )
-                                      }
-                                      placeholder="Max Length"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">
-                                      Precision
-                                    </label>
-                                    <input
-                                      type="number"
-                                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
-                                      value={field.Precision ?? ""}
-                                      onChange={(e) =>
-                                        handleFieldChange(
-                                          field.id,
-                                          "Precision",
-                                          e.target.value
-                                            ? parseInt(e.target.value)
-                                            : undefined
-                                        )
-                                      }
-                                      placeholder="Precision"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-col items-end gap-2 ml-6">
-                                <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                                  {schemaService.getDataTypeDisplayName(
-                                    field.dataType
-                                  )}
-                                </span>
-
-                                {field.isRequired && (
-                                  <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">
-                                    Required
-                                  </span>
-                                )}
-                              </div>
+                {/* Section Groups */}
+                {schemaToView.sections && schemaToView.sections.length > 0 && (
+                  <div className="space-y-4">
+                    {schemaToView.sections
+                      .slice()
+                      .sort(
+                        (a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)
+                      )
+                      .map((section) => (
+                        <div
+                          key={section.id}
+                          className="border rounded-lg bg-white"
+                        >
+                          <div className="flex items-center justify-between px-4 py-2 border-b bg-gray-50 rounded-t-lg">
+                            <button
+                              onClick={() => toggleSection(String(section.id))}
+                              className="font-medium text-gray-800 text-left flex-1"
+                            >
+                              {expandedSections[String(section.id)] ? "−" : "+"}{" "}
+                              {section.displayOrder || 0}. {section.name}
+                              <span className="ml-2 text-xs text-gray-500">
+                                ({section.fields?.length || 0} fields)
+                              </span>
+                            </button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEditSection(section)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteSection(section)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </Button>
                             </div>
                           </div>
-                        ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-gray-500 border border-gray-200 rounded-lg">
-                    <Database className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-lg font-medium">No fields defined</p>
-                    <p className="text-sm">
-                      This schema doesn't have any fields yet
-                    </p>
+                          {expandedSections[String(section.id)] && (
+                            <div className="p-4 space-y-3">
+                              {(section.fields?.length || 0) === 0 && (
+                                <p className="text-xs text-gray-500">
+                                  No fields in this section.
+                                </p>
+                              )}
+                              {(section.fields || [])
+                                .slice()
+                                .sort((a, b) => a.displayOrder - b.displayOrder)
+                                .map((field) => (
+                                  <div
+                                    key={field.id}
+                                    className="p-3 border rounded-lg hover:bg-gray-50 flex items-start justify-between"
+                                  >
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-3 mb-1">
+                                        <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                                          {field.displayOrder}
+                                        </span>
+                                        <h5 className="font-medium text-gray-900">
+                                          {field.fieldLabel || field.fieldName}
+                                          {field.isRequired && (
+                                            <span className="text-red-500 ml-1">
+                                              *
+                                            </span>
+                                          )}
+                                        </h5>
+                                      </div>
+                                      <div className="ml-9 flex flex-wrap gap-4 text-xs text-gray-600">
+                                        <span>
+                                          <strong>Name:</strong>{" "}
+                                          {field.fieldName}
+                                        </span>
+                                        <span>
+                                          <strong>Type:</strong>{" "}
+                                          {field.dataType}
+                                        </span>
+                                        {field.format && (
+                                          <span>
+                                            <strong>Format:</strong>{" "}
+                                            {field.format}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <select
+                                        className="text-xs border rounded px-1 py-0.5"
+                                        value={field.sectionId ?? section.id}
+                                        onChange={(e) =>
+                                          handleAssignFieldSection(
+                                            field,
+                                            e.target.value || null
+                                          )
+                                        }
+                                      >
+                                        <option value="">Unassigned</option>
+                                        {schemaToView.sections?.map((sec) => (
+                                          <option key={sec.id} value={sec.id}>
+                                            {sec.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                   </div>
                 )}
+
+                {/* Unassigned Fields */}
+                {schemaToView.unassignedFields &&
+                  schemaToView.unassignedFields.length > 0 && (
+                    <div className="border rounded-lg bg-white">
+                      <div className="px-4 py-2 border-b bg-yellow-50 rounded-t-lg flex items-center justify-between">
+                        <span className="font-medium text-gray-800">
+                          Unassigned Fields (
+                          {schemaToView.unassignedFields.length})
+                        </span>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        {schemaToView.unassignedFields
+                          .slice()
+                          .sort((a, b) => a.displayOrder - b.displayOrder)
+                          .map((field) => (
+                            <div
+                              key={field.id}
+                              className="p-3 border rounded-lg hover:bg-gray-50 flex items-start justify-between"
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-1">
+                                  <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                                    {field.displayOrder}
+                                  </span>
+                                  <h5 className="font-medium text-gray-900">
+                                    {field.fieldLabel || field.fieldName}
+                                    {field.isRequired && (
+                                      <span className="text-red-500 ml-1">
+                                        *
+                                      </span>
+                                    )}
+                                  </h5>
+                                </div>
+                                <div className="ml-9 flex flex-wrap gap-4 text-xs text-gray-600">
+                                  <span>
+                                    <strong>Name:</strong> {field.fieldName}
+                                  </span>
+                                  <span>
+                                    <strong>Type:</strong> {field.dataType}
+                                  </span>
+                                  {field.format && (
+                                    <span>
+                                      <strong>Format:</strong> {field.format}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <select
+                                  className="text-xs border rounded px-1 py-0.5"
+                                  value=""
+                                  onChange={(e) =>
+                                    handleAssignFieldSection(
+                                      field,
+                                      e.target.value || null
+                                    )
+                                  }
+                                >
+                                  <option value="">Unassigned</option>
+                                  {schemaToView.sections?.map((sec) => (
+                                    <option key={sec.id} value={sec.id}>
+                                      {sec.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
               </div>
             </div>
           )}
         </Modal>
+
+        {showSectionModal && (
+          <Modal
+            isOpen={showSectionModal}
+            onClose={() => setShowSectionModal(false)}
+            title={editingSection ? "Edit Section" : "Add Section"}
+          >
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="w-full border rounded px-2 py-1 text-sm"
+                    value={sectionForm.name}
+                    maxLength={255}
+                    onChange={(e) =>
+                      setSectionForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Display Order
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full border rounded px-2 py-1 text-sm"
+                    value={sectionForm.displayOrder ?? ""}
+                    min={1}
+                    onChange={(e) =>
+                      setSectionForm((f) => ({
+                        ...f,
+                        displayOrder:
+                          e.target.value === ""
+                            ? undefined
+                            : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  className="w-full border rounded px-2 py-1 text-sm resize-y min-h-[80px]"
+                  value={sectionForm.description}
+                  maxLength={1000}
+                  onChange={(e) =>
+                    setSectionForm((f) => ({
+                      ...f,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Optional section description"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {sectionForm.description?.length || 0}/1000
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="tenant-section-active"
+                  type="checkbox"
+                  checked={sectionForm.isActive}
+                  onChange={(e) =>
+                    setSectionForm((f) => ({
+                      ...f,
+                      isActive: e.target.checked,
+                    }))
+                  }
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label
+                  htmlFor="tenant-section-active"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Active
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSectionModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveSection}
+                  disabled={sectionSaving || !sectionForm.name.trim()}
+                >
+                  {sectionSaving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
 
         {/* Error Modal */}
         <Modal

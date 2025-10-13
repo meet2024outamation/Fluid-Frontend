@@ -29,6 +29,7 @@ import {
   type Schema,
   DATA_TYPES,
   type DataType,
+  type SectionDto,
 } from "../services/schemaService";
 import { useFormValidation } from "../hooks/useFormValidation";
 
@@ -54,6 +55,7 @@ interface SchemaField {
   minLength?: number;
   maxLength?: number;
   precision?: number;
+  sectionId?: number | string | null; // section assignment (numeric from backend or temp string)
 }
 
 interface SchemaFormProps {
@@ -75,6 +77,16 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
   });
 
   const [schemaFields, setSchemaFields] = useState<SchemaField[]>([]);
+  const [sections, setSections] = useState<SectionDto[]>([]);
+  const [showSectionModal, setShowSectionModal] = useState(false);
+  const [editingSection, setEditingSection] = useState<SectionDto | null>(null);
+  const [sectionForm, setSectionForm] = useState<{
+    name: string;
+    description?: string;
+    isActive: boolean;
+    displayOrder?: number | null;
+  }>({ name: "", description: "", isActive: true, displayOrder: undefined });
+  const [sectionSaving, setSectionSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -127,6 +139,13 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
       });
 
       // Convert schema fields to editable format
+      // Sections now derived in service; just set if present
+      setSections(
+        (schema.sections || [])
+          .slice()
+          .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+      );
+
       const editableFields: SchemaField[] = schema.schemaFields.map((field) => {
         // Normalize data type to ensure it matches our expected values
         const validDataType = normalizeDataType(field.dataType);
@@ -143,6 +162,7 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           isDeleted: false,
           isNew: false,
           isCollapsed: false, // Start expanded
+          sectionId: field.sectionId ?? null,
         };
       });
 
@@ -176,6 +196,7 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
       isDeleted: false,
       isNew: true,
       isCollapsed: false,
+      sectionId: null,
     };
     // Insert new field into the correct position in the full schemaFields array
     let newFields: SchemaField[] = [];
@@ -313,6 +334,12 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           format: field.format.trim() || undefined,
           isRequired: field.isRequired,
           displayOrder: field.displayOrder,
+          sectionId:
+            field.sectionId === null || field.sectionId === undefined
+              ? null
+              : typeof field.sectionId === "number"
+                ? String(field.sectionId)
+                : field.sectionId,
         })),
       };
 
@@ -334,6 +361,12 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           isRequired: field.isRequired,
           displayOrder: field.displayOrder,
           isDeleted: field.isDeleted,
+          sectionId:
+            field.sectionId === null || field.sectionId === undefined
+              ? null
+              : typeof field.sectionId === "number"
+                ? String(field.sectionId)
+                : field.sectionId,
         })),
       };
 
@@ -362,6 +395,12 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
             format: field.format.trim() || undefined,
             isRequired: field.isRequired,
             displayOrder: field.displayOrder,
+            sectionId:
+              field.sectionId === null || field.sectionId === undefined
+                ? null
+                : typeof field.sectionId === "number"
+                  ? String(field.sectionId)
+                  : field.sectionId,
           })),
         };
 
@@ -406,6 +445,12 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
             isRequired: field.isRequired,
             displayOrder: field.displayOrder,
             isDeleted: field.isDeleted,
+            sectionId:
+              field.sectionId === null || field.sectionId === undefined
+                ? null
+                : typeof field.sectionId === "number"
+                  ? String(field.sectionId)
+                  : field.sectionId,
           })),
         };
 
@@ -522,6 +567,116 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
   const activeFields = schemaFields.filter((f) => !f.isDeleted);
   const deletedFields = schemaFields.filter((f) => f.isDeleted);
 
+  // Section CRUD helpers (inline minimal for form)
+  const openCreateSection = () => {
+    setEditingSection(null);
+    setSectionForm({
+      name: "",
+      description: "",
+      isActive: true,
+      displayOrder: sections.length + 1,
+    });
+    setShowSectionModal(true);
+  };
+  const handleSaveSection = async () => {
+    if (!formData.name.trim() && !isEditMode) return; // schema not yet created server-side
+    try {
+      setSectionSaving(true);
+      if (editingSection) {
+        const sectionIdStr = String(editingSection.id);
+        const res = isGlobal
+          ? await schemaService.updateSection(schemaId!, sectionIdStr, {
+              name: sectionForm.name,
+              description: sectionForm.description,
+              displayOrder: sectionForm.displayOrder,
+              isActive: sectionForm.isActive,
+            })
+          : await schemaService.updateTenantSection(schemaId!, sectionIdStr, {
+              name: sectionForm.name,
+              description: sectionForm.description,
+              displayOrder: sectionForm.displayOrder,
+              isActive: sectionForm.isActive,
+            });
+        if (res.success && res.data) {
+          setSections((prev) =>
+            prev
+              .map((s) => (s.id === res.data!.id ? res.data! : s))
+              .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+          );
+        }
+      } else {
+        if (!schemaId) {
+          // In create mode: create local placeholder section only
+          const tempId = `temp_${Date.now()}`;
+          setSections((prev) => [
+            ...prev,
+            {
+              id: tempId,
+              schemaId: String(schemaId || 0),
+              name: sectionForm.name,
+              displayOrder: sectionForm.displayOrder,
+              fields: [],
+            } as any,
+          ]);
+        } else {
+          const res = isGlobal
+            ? await schemaService.createSection(schemaId!, {
+                name: sectionForm.name,
+                description: sectionForm.description,
+                displayOrder: sectionForm.displayOrder,
+                isActive: sectionForm.isActive,
+              })
+            : await schemaService.createTenantSection(schemaId!, {
+                name: sectionForm.name,
+                description: sectionForm.description,
+                displayOrder: sectionForm.displayOrder,
+                isActive: sectionForm.isActive,
+              });
+          if (res.success && res.data) {
+            setSections((prev) =>
+              [...prev, res.data!].sort(
+                (a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)
+              )
+            );
+          }
+        }
+      }
+      setShowSectionModal(false);
+    } catch (e) {
+      console.error("Section save failed", e);
+    } finally {
+      setSectionSaving(false);
+    }
+  };
+  const handleDeleteSection = async (section: SectionDto) => {
+    if (!confirm(`Delete section "${section.name}"?`)) return;
+    try {
+      const isTemp =
+        typeof section.id === "string" && section.id.startsWith("temp_");
+      if (isTemp) {
+        setSections((prev) => prev.filter((s) => s.id !== section.id));
+      } else {
+        const res = isGlobal
+          ? await schemaService.deleteSection(schemaId!, String(section.id))
+          : await schemaService.deleteTenantSection(
+              schemaId!,
+              String(section.id)
+            );
+        if (res.success) {
+          setSections((prev) => prev.filter((s) => s.id !== section.id));
+        }
+      }
+      // Unassign any fields referencing this section
+      setSchemaFields((prev) =>
+        prev.map((f) =>
+          f.sectionId === section.id ? { ...f, sectionId: null } : f
+        )
+      );
+    } catch (e) {
+      console.error("Delete section failed", e);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-8">
@@ -627,6 +782,16 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Schema Fields ({activeFields.length})</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={openCreateSection}
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Section
+                </Button>
+              </div>
             </CardTitle>
             <CardDescription>
               {isCreateMode
@@ -852,6 +1017,38 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
                               </p>
                             </div>
 
+                            {/* Section Selector */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Section{" "}
+                                <span className="text-gray-400">
+                                  (Optional)
+                                </span>
+                              </label>
+                              <select
+                                value={field.sectionId || ""}
+                                onChange={(e) =>
+                                  updateSchemaField(field.tempId, {
+                                    sectionId: e.target.value || null,
+                                  })
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="">Unassigned</option>
+                                {sections.map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {(s.displayOrder || 0) + ". " + s.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {sections.length === 0 && (
+                                <p className="mt-1 text-xs text-gray-500">
+                                  No sections yet. Use the "Section" button
+                                  above to create.
+                                </p>
+                              )}
+                            </div>
+
                             {/* MinLength, MaxLength, Precision Inputs */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               {/* MinLength */}
@@ -1073,6 +1270,123 @@ const SchemaForm: React.FC<SchemaFormProps> = ({ isGlobal = false }) => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Section Create/Edit Modal */}
+      {showSectionModal && (
+        <Modal
+          isOpen={showSectionModal}
+          onClose={() => setShowSectionModal(false)}
+          title={editingSection ? "Edit Section" : "Add Section"}
+        >
+          <div className="space-y-4">
+            {isCreateMode && !schemaId && (
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs p-2 rounded">
+                Sections created now are placeholders until the schema is saved.
+              </div>
+            )}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full border rounded px-2 py-1 text-sm"
+                  value={sectionForm.name}
+                  maxLength={255}
+                  onChange={(e) =>
+                    setSectionForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Display Order
+                </label>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1 text-sm"
+                  value={sectionForm.displayOrder ?? ""}
+                  min={1}
+                  onChange={(e) =>
+                    setSectionForm((f) => ({
+                      ...f,
+                      displayOrder:
+                        e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                className="w-full border rounded px-2 py-1 text-sm resize-y min-h-[80px]"
+                value={sectionForm.description}
+                maxLength={1000}
+                onChange={(e) =>
+                  setSectionForm((f) => ({ ...f, description: e.target.value }))
+                }
+                placeholder="Optional section description"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {sectionForm.description?.length || 0}/1000
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="form-section-active"
+                type="checkbox"
+                checked={sectionForm.isActive}
+                onChange={(e) =>
+                  setSectionForm((f) => ({ ...f, isActive: e.target.checked }))
+                }
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label
+                htmlFor="form-section-active"
+                className="text-sm font-medium text-gray-700"
+              >
+                Active
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSectionModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveSection}
+                disabled={sectionSaving || !sectionForm.name.trim()}
+              >
+                {sectionSaving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+            {editingSection &&
+              !(
+                typeof editingSection.id === "string" &&
+                editingSection.id.startsWith("temp_")
+              ) && (
+                <div className="flex justify-between pt-4 border-t">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteSection(editingSection)}
+                  >
+                    Delete Section
+                  </Button>
+                </div>
+              )}
+          </div>
+        </Modal>
+      )}
 
       {/* Success Modal */}
       <Modal

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   Users,
@@ -11,7 +11,6 @@ import {
   Clock,
   AlertTriangle,
   User,
-  Filter,
 } from "lucide-react";
 import {
   Card,
@@ -134,30 +133,6 @@ export const AdminDashboard: React.FC = () => {
           </Link>
         </div>
       </div>
-
-      {/* Project Filter */}
-      <Card className="mb-4">
-        <div className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Filter by Project:</span>
-            </div>
-            <div className="flex-1 max-w-xs">
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                disabled={isLoading}
-              >
-                <option value="">All Projects</option>
-                {/* TODO: Add project options when project API is available */}
-              </select>
-            </div>
-            <div className="text-sm text-gray-500">
-              Showing {stats.totalAssigned} assigned orders
-            </div>
-          </div>
-        </div>
-      </Card>
 
       {/* Assigned Orders Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -163,13 +163,7 @@ export const canAccessNavigationItem = (
 ): boolean => {
   const dev = import.meta.env?.DEV;
   const debugLog = (reason: string) => {
-    // if (dev) {
-    //   // Aggregate minimal info for diagnosing why nav item hidden
-    //   console.log(`[NAV] hide '${item.id}': ${reason}`, {
-    //     reqPerms: item.requiredPermissions,
-    //     userPerms: permissionService.getUserPermissionNames?.(),
-    //   });
-    // }
+    // Removed unused debug helpers (dev/debugLog)
   };
   // PRIORITIZE PERMISSION-BASED ACCESS CONTROL
 

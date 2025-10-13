@@ -23,6 +23,7 @@ export const API_CONFIG = {
     BATCHES: "/api/batches",
     ORDERS: "/api/orders",
     ORDER_STATUSES: "/api/order-statuses",
+    SCHEMA_ORDER: "/api/schema/order", // Schema fields for order keying
     FIELD_MAPPINGS: "/api/field-mappings",
     ROLES: "/api/roles",
     // Authentication endpoints

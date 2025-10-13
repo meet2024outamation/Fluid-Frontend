@@ -474,6 +474,20 @@ const OrdersPage: React.FC = () => {
                         >
                           View
                         </Button>
+
+                        {/* Keying button - available for assigned orders */}
+                        {order.assignedTo === currentUser?.id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+                            onClick={() =>
+                              navigate(`/orders/${order.id}/keying`)
+                            }
+                          >
+                            Keying
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

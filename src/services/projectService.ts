@@ -1,4 +1,4 @@
-import { API_CONFIG, apiRequest, apiAutoRequest } from "../config/api";
+import { API_CONFIG, apiRequest } from "../config/api";
 
 // Updated interface to match ProjectListResponse from backend
 export interface ProjectListResponse {
@@ -50,20 +50,17 @@ class ProjectService {
   }
 
   async getProjects(): Promise<ApiProject[]> {
-    const response = await apiAutoRequest(
-      API_CONFIG.ENDPOINTS.PROJECTS_BY_TENANT,
-      {
-        method: "GET",
-      }
-    );
+    const response = await apiRequest(API_CONFIG.ENDPOINTS.PROJECTS_BY_TENANT, {
+      method: "GET",
+    });
 
     return this.handleResponse<ApiProject[]>(response);
   }
 
-  // Method for getting projects with automatic role-based context
+  // Method for getting projects for a specific tenant
   async getProjectsByTenant(): Promise<ApiProject[]> {
     try {
-      const response = await apiAutoRequest(
+      const response = await apiRequest(
         API_CONFIG.ENDPOINTS.PROJECTS_BY_TENANT,
         {
           method: "GET",
@@ -78,26 +75,27 @@ class ProjectService {
 
   async getAllProjects(): Promise<ApiProject[]> {
     try {
-      // Use automatic headers - the system will determine the right endpoint and context
-      // Product Owner: Gets all projects globally (no tenant header)
-      // Tenant Admin: Gets tenant-specific projects (X-Tenant-Id header)
-      // Regular User: Gets projects in current context (both headers)
-      const response = await apiAutoRequest(API_CONFIG.ENDPOINTS.PROJECTS, {
-        method: "GET",
-      });
-      return this.handleResponse<ApiProject[]>(response);
+      // Check if a tenant identifier is selected (indicating tenant-specific access)
+      const selectedTenantIdentifier = localStorage.getItem(
+        "selectedTenantIdentifier"
+      );
+
+      if (selectedTenantIdentifier) {
+        // Use tenant-specific endpoint when a tenant is selected
+        return await this.getProjectsByTenant();
+      } else {
+        // Use global endpoint for Product Owners or when no tenant is selected
+        return await this.getAllProjectsGlobal();
+      }
     } catch (error) {
       console.error("Failed to fetch projects:", error);
       return [];
     }
-  }
-
-  // Method for getting all projects across all tenants (for Product Owners)
+  } // Method for getting all projects across all tenants (for Product Owners)
   async getAllProjectsGlobal(): Promise<ApiProject[]> {
     try {
       const response = await apiRequest(API_CONFIG.ENDPOINTS.PROJECTS, {
         method: "GET",
-        useAutoHeaders: true, // Let system determine appropriate headers
       });
       return this.handleResponse<ApiProject[]>(response);
     } catch (error) {

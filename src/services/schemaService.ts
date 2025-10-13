@@ -9,9 +9,31 @@ export interface SchemaField {
   format?: string;
   isRequired: boolean;
   displayOrder: number;
+  sectionId?: number | null; // New optional Section relationship (int id)
   MinLength?: number;
   MaxLength?: number;
   Precision?: number;
+  // Optional embedded section details from backend (SchemaFieldResponse.Section)
+  section?: {
+    id: number;
+    name: string;
+    description?: string | null;
+    isActive: boolean;
+    displayOrder: number;
+    createdAt?: string;
+    updatedAt?: string | null;
+  } | null;
+}
+
+// New Section DTO interface
+export interface SectionDto {
+  id: number | string; // server int id or client temp id
+  schemaId: number | string;
+  name: string;
+  description?: string | null;
+  displayOrder?: number | null;
+  isActive?: boolean;
+  fields?: SchemaField[]; // optional list of fields in this section
 }
 
 export interface Schema {
@@ -19,7 +41,9 @@ export interface Schema {
   name: string;
   description?: string;
   version: number;
-  schemaFields: SchemaField[];
+  schemaFields: SchemaField[]; // Flat list from backend
+  sections?: SectionDto[]; // Derived grouping from schemaFields.section
+  unassignedFields?: SchemaField[]; // Derived list of fields without a section
   isActive: boolean;
   createdAt: string;
   updatedAt?: string;
@@ -52,6 +76,7 @@ export interface CreateSchemaFieldRequest {
   MinLength?: number;
   MaxLength?: number;
   Precision?: number;
+  sectionId?: string | null; // Optional section assignment during creation
 }
 
 export interface UpdateSchemaRequest {
@@ -74,6 +99,7 @@ export interface UpdateSchemaFieldRequest {
   MinLength?: number;
   MaxLength?: number;
   Precision?: number;
+  sectionId?: string | null; // Optional section assignment during update
 }
 
 export const DATA_TYPES = [
@@ -166,6 +192,363 @@ class SchemaService {
         }
       );
       const data = await this.handleResponse<Schema>(response);
+      this.deriveSections(data);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  // New: Get schema with sections and unassigned fields (global schema endpoint variant)
+  async getGlobalSchemaDetails(schemaId: string): Promise<ApiResponse<Schema>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}`,
+        {
+          method: "GET",
+        }
+      );
+      const data = await this.handleResponse<Schema>(response);
+      this.deriveSections(data);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  // Sections endpoints
+  async getSectionsBySchema(
+    schemaId: string
+  ): Promise<ApiResponse<SectionDto[]>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}/sections`,
+        { method: "GET" }
+      );
+      const data = await this.handleResponse<SectionDto[]>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  // Unified Global Section endpoints (nested routes)
+  async createSection(
+    schemaId: string | number,
+    request: {
+      name: string;
+      description?: string;
+      displayOrder?: number | null;
+      isActive?: boolean;
+    }
+  ): Promise<ApiResponse<SectionDto>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}/sections`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: request.name,
+            description: request.description || null,
+            displayOrder: request.displayOrder ?? 1,
+            isActive: request.isActive ?? true,
+          }),
+        }
+      );
+      const data = await this.handleResponse<SectionDto>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  async updateSection(
+    schemaId: string | number,
+    sectionId: string,
+    request: {
+      name: string;
+      description?: string;
+      displayOrder?: number | null;
+      isActive?: boolean;
+    }
+  ): Promise<ApiResponse<SectionDto>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}/sections/${sectionId}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            name: request.name,
+            description: request.description || null,
+            displayOrder: request.displayOrder ?? 1,
+            isActive: request.isActive ?? true,
+          }),
+        }
+      );
+      const data = await this.handleResponse<SectionDto>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  async deleteSection(
+    schemaId: string | number,
+    sectionId: string
+  ): Promise<ApiResponse<null>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/${schemaId}/sections/${sectionId}`,
+        { method: "DELETE" }
+      );
+      if (!response.ok) {
+        throw new ApiError(
+          `HTTP ${response.status}`,
+          response.status,
+          await response.json().catch(() => ({}))
+        );
+      }
+      return { success: true, data: null };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  async assignFieldToSection(
+    fieldId: number,
+    sectionId: string | null
+  ): Promise<ApiResponse<SchemaField>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.GLOBAL_SCHEMAS}/field/${fieldId}/assign-section`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ sectionId }),
+        }
+      );
+      const data = await this.handleResponse<SchemaField>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  // Tenant schema section management (mirrors global endpoints but under /api/schemas)
+  // Tenant (project) schema section endpoints (nested)
+  async createTenantSection(
+    schemaId: string | number,
+    request: {
+      name: string;
+      description?: string;
+      displayOrder?: number | null;
+      isActive?: boolean;
+    }
+  ): Promise<ApiResponse<SectionDto>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}/sections`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: request.name,
+            description: request.description || null,
+            displayOrder: request.displayOrder ?? 1,
+            isActive: request.isActive ?? true,
+          }),
+        }
+      );
+      const data = await this.handleResponse<SectionDto>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  async updateTenantSection(
+    schemaId: string | number,
+    sectionId: string,
+    request: {
+      name: string;
+      description?: string;
+      displayOrder?: number | null;
+      isActive?: boolean;
+    }
+  ): Promise<ApiResponse<SectionDto>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}/sections/${sectionId}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            name: request.name,
+            description: request.description || null,
+            displayOrder: request.displayOrder ?? 1,
+            isActive: request.isActive ?? true,
+          }),
+        }
+      );
+      const data = await this.handleResponse<SectionDto>(response);
+      return { success: true, data };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  async deleteTenantSection(
+    schemaId: string | number,
+    sectionId: string
+  ): Promise<ApiResponse<null>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/${schemaId}/sections/${sectionId}`,
+        { method: "DELETE" }
+      );
+      if (!response.ok) {
+        throw new ApiError(
+          `HTTP ${response.status}`,
+          response.status,
+          await response.json().catch(() => ({}))
+        );
+      }
+      return { success: true, data: null };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          errors: error.data?.errors,
+          validationErrors: error.data?.validationErrors,
+        };
+      }
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
+    }
+  }
+
+  async assignTenantFieldToSection(
+    fieldId: number,
+    sectionId: string | null
+  ): Promise<ApiResponse<SchemaField>> {
+    try {
+      const response = await apiRequest(
+        `${API_CONFIG.ENDPOINTS.SCHEMAS}/field/${fieldId}/assign-section`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ sectionId }),
+        }
+      );
+      const data = await this.handleResponse<SchemaField>(response);
       return { success: true, data };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -360,6 +743,7 @@ class SchemaService {
         }
       );
       const data = await this.handleResponse<Schema>(response);
+      this.deriveSections(data);
       return { success: true, data };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -645,6 +1029,46 @@ class SchemaService {
 
   sortSchemaFields(fields: SchemaField[]): SchemaField[] {
     return [...fields].sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
+  // Build derived sections & unassignedFields from flat schemaFields
+  private deriveSections(schema: Schema) {
+    if (!schema || !schema.schemaFields) return;
+    const sectionMap: Record<number, SectionDto> = {};
+    const unassigned: SchemaField[] = [];
+    for (const field of schema.schemaFields) {
+      const sId = field.sectionId ?? null;
+      if (!sId) {
+        unassigned.push(field);
+        continue;
+      }
+      // Use embedded section details if present
+      if (!sectionMap[sId]) {
+        const meta = field.section;
+        sectionMap[sId] = {
+          id: sId,
+          // schemaId not in embedded section; fall back to root schema id
+          schemaId: schema.id,
+          name: meta?.name || `Section ${sId}`,
+          description: meta?.description || null,
+          displayOrder: meta?.displayOrder ?? null,
+          isActive: meta?.isActive ?? true,
+          fields: [],
+        };
+      }
+      sectionMap[sId].fields!.push(field);
+    }
+    // Sort fields inside sections
+    Object.values(sectionMap).forEach((sec) => {
+      if (sec.fields) {
+        sec.fields = this.sortSchemaFields(sec.fields);
+      }
+    });
+    const sections = Object.values(sectionMap).sort(
+      (a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)
+    );
+    schema.sections = sections;
+    schema.unassignedFields = this.sortSchemaFields(unassigned);
   }
 }
 

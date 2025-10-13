@@ -31,6 +31,7 @@ import TenantOrderFlowManagement from "./pages/TenantOrderFlowManagement";
 import ProductOwnerOrderStatusManagement from "./pages/ProductOwnerOrderStatusManagement";
 import OrdersPage from "./pages/OrdersPage";
 import OrderDetailsPage from "./pages/OrderDetailsPage";
+import OrderKeyingView from "./pages/OrderKeyingView";
 import "./App.css";
 
 function App() {
@@ -311,6 +312,18 @@ function App() {
                     requireAll={false}
                   >
                     <OrderDetailsPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="orders/:id/keying"
+                element={
+                  <ProtectedRoute
+                    permissions={["ViewOrders", "ProcessOrders"]}
+                    requireAll={false}
+                  >
+                    <OrderKeyingView />
                   </ProtectedRoute>
                 }
               />
